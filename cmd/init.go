@@ -1,12 +1,12 @@
 /*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
+Copyright 2024 NAME HERE EMAIL ADDRESS
 */
 package cmd
 
 import (
+	"github.com/arcalyx/gitver/internal/version"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"gotver/internal/version"
 	"log"
 )
 
@@ -17,13 +17,15 @@ var (
 // initCmd represents the init command
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
+	Short: "Initialize gitver in your project",
+	Long: `Initialize gitver in your project by creating the necessary configuration files.
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+This command creates a .gitver directory in your project with the required configuration files.
+You can specify an initial version with the --version flag (defaults to 0.0.1).
+
+Example:
+  gitver init                # Initialize with default version 0.0.1
+  gitver init --version 1.0.0  # Initialize with specific version`,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := version.FromString(versionFlag)
 		if err != nil {
@@ -42,13 +44,13 @@ to quickly create a Cobra application.`,
 			return
 		}
 
-		log.Println("Gotver initialized for the project.")
+		log.Println("Gitver initialized for the project.")
 	},
 }
 
 func init() {
 	configCmd.AddCommand(initCmd)
-	initCmd.Flags().StringVarP(&versionFlag, "version", "v", "0.0.1", "overrides the default initial version")
+	initCmd.Flags().StringVarP(&versionFlag, "version", "v", "0.0.1", "Initial version to set (default: 0.0.1)")
 
 	// Here you will define your flags and configuration settings.
 

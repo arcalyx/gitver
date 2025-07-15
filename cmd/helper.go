@@ -2,9 +2,9 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/arcalyx/gitver/internal/gitops"
+	"github.com/arcalyx/gitver/internal/version"
 	"github.com/spf13/viper"
-	"gotver/internal/gitops"
-	"gotver/internal/version"
 	"log"
 )
 

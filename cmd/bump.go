@@ -2,11 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/spf13/cobra"
-	"gotver/internal/constants"
-	"gotver/internal/gitops"
-	"gotver/internal/version"
+	"github.com/arcalyx/gitver/internal/constants"
+	"github.com/arcalyx/gitver/internal/gitops"
+	"github.com/arcalyx/gitver/internal/version"
+	"github.com/go-g
 	"log"
 	"strings"
 )
@@ -44,7 +43,20 @@ const (
 var bumpCmd = &cobra.Command{
 	Use:   "bump",
 	Short: "Bump the version of the project",
-	Long:  "Bump the version of the project based on the provided flags: --auto, --commit, --major, --minor, or --patch.",
+	Long: `Bump the version of the project based on the provided flags.
+	
+This command allows you to increment the version number according to semantic versioning rules.
+You can manually specify which part of the version to bump (major, minor, patch) or use the
+auto mode to determine the appropriate version bump based on conventional commit messages.
+
+Examples:
+  gitver bump --major                # Bump major version (x.0.0)
+  gitver bump --minor                # Bump minor version (0.x.0)
+  gitver bump --patch                # Bump patch version (0.0.x)
+  gitver bump --auto                 # Automatically determine version bump from commits
+  gitver bump --commit               # Bump version based on the latest commit message
+  gitver bump --git COMMIT_TAG       # Commit and tag the version bump
+  gitver bump --git COMMIT_TAG_PUSH  # Commit, tag, and push the version bump`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if !validateMode(majorFlag, minorFlag, patchFlag, autoFlag, commitFlag) {
 			log.Fatalf(message0001)
@@ -81,14 +93,14 @@ var bumpCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(bumpCmd)
-	bumpCmd.Flags().BoolVar(&autoFlag, "auto", false, "Bump version from git commits")
-	bumpCmd.Flags().BoolVar(&commitFlag, "commit", false, "Bump version from git commits")
-	bumpCmd.Flags().BoolVar(&majorFlag, "major", false, "Bump the major version")
-	bumpCmd.Flags().BoolVar(&minorFlag, "minor", false, "Bump the minor version")
-	bumpCmd.Flags().BoolVar(&patchFlag, "patch", false, "Bump the patch version")
-	bumpCmd.Flags().BoolVar(&verbose, "verbose", false, "Bump the patch version")
-	bumpCmd.Flags().BoolVar(&amend, "amend", false, "Bump the patch version")
-	bumpCmd.Flags().StringVar(&gitFlag, "git", "", "Auto Commit Bump version changes. Valid Values are COMMIT_TAG COMMIT_TAG_PUSH")
+	bumpCmd.Flags().BoolVar(&autoFlag, "auto", false, "Automatically determine version bump from commit messages")
+	bumpCmd.Flags().BoolVar(&commitFlag, "commit", false, "Bump version based on the latest commit message")
+	bumpCmd.Flags().BoolVar(&majorFlag, "major", false, "Bump the major version (x.0.0)")
+	bumpCmd.Flags().BoolVar(&minorFlag, "minor", false, "Bump the minor version (0.x.0)")
+	bumpCmd.Flags().BoolVar(&patchFlag, "patch", false, "Bump the patch version (0.0.x)")
+	bumpCmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output")
+	bumpCmd.Flags().BoolVar(&amend, "amend", false, "Amend the previous commit instead of creating a new one")
+	bumpCmd.Flags().StringVar(&gitFlag, "git", "", "Git operations to perform after bumping. Valid values: COMMIT_TAG, COMMIT_TAG_PUSH")
 }
 
 func validateMode(values ...bool) bool {

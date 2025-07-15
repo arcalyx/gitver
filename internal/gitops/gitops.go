@@ -2,11 +2,11 @@ package gitops
 
 import (
 	"fmt"
+	"github.com/arcalyx/gitver/in
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
-	"gotver/internal/constants"
 	"sort"
 	"time"
 )
@@ -26,6 +26,12 @@ type GitOps struct {
 	head          *plumbing.Reference
 	commitMessage string
 	tagMessage    string
+}
+
+type Tag struct {
+	Name    string
+	Message string
+	Hash    plumbing.Hash
 }
 
 func init() {
@@ -338,4 +344,88 @@ func (g *GitOps) GetCommitsBetweenTags(startTag, endTag string) ([]*object.Commi
 	}
 
 	return commits, nil
+}
+
+func GetTags() ([]Tag, error) {
+	return g.GetTags()
+}
+
+func (g *GitOps) GetTags() ([]Tag, error) {
+	if g.repository == nil {
+		if err := g.ReadRepository(); err != nil {
+			return nil, err
+		}
+	}
+
+	tagRefs, err := g.repository.Tags()
+	if err != nil {
+		return nil, err
+	}
+
+	var tags []Tag
+	err = tagRefs.ForEach(func(t *plumbing.Reference) error {
+		obj, err := g.repository.TagObject(t.Hash())
+		if err != nil {
+			// It might be a lightweight tag, so try to get the commit directly
+			commit, err := g.repository.CommitObject(t.Hash())
+			if err != nil {
+				return nil // Ignore errors caused by lightweight tags
+			}
+			tags = append(tags, Tag{
+				Name:    t.Name().Short(),
+				Message: commit.Message,
+				Hash:    t.Hash(),
+			})
+			return nil
+		}
+		tags = append(tags, Tag{
+			Name:    t.Name().Short(),
+			Message: obj.Message,
+			Hash:    obj.Target,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Sort tags by creation time (newest first)
+	sort.Slice(tags, func(i, j int) bool {
+		timeI, _ := g.GetTagTime(tags[i].Name)
+		timeJ, _ := g.GetTagTime(tags[j].Name)
+		return timeI.After(timeJ)
+	})
+
+	return tags, nil
+}
+
+func GetTagTime(tagName string) (time.Time, error) {
+	return g.GetTagTime(tagName)
+}
+
+func (g *GitOps) GetTagTime(tagName string) (time.Time, error) {
+	if g.repository == nil {
+		if err := g.ReadRepository(); err != nil {
+			return time.Time{}, err
+		}
+	}
+
+	tagRef, err := g.repository.Tag(tagName)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	// Try to get the tag object (for annotated tags)
+	tagObj, err := g.repository.TagObject(tagRef.Hash())
+	if err == nil {
+		return tagObj.Tagger.When, nil
+	}
+
+	// If it's a lightweight tag, get the commit it points to
+	commit, err := g.repository.CommitObject(tagRef.Hash())
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	return commit.Committer.When, nil
 }

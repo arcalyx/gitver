@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"github.com/arcalyx/gitver/internal/constants"
+	"github.com/arcalyx/gitver/internal/gitops"
+	"github.com/arcalyx/gitver/internal/version"
 	"github.com/spf13/viper"
-	"gotver/internal/constants"
-	"gotver/internal/gitops"
-	"gotver/internal/version"
 	"log"
 	"os"
 
@@ -14,13 +14,19 @@ import (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   constants.ProgrammName,
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-		examples and usage of using your application. For example:
-		
-		Cobra is a CLI library for Go that empowers applications.
-		This application is a tool to generate the needed files
-		to quickly create a Cobra application.`,
+	Short: "A Git-based semantic versioning tool",
+	Long: `Gitver is a command-line tool for managing semantic versioning in Git repositories.
+	
+It helps you automate version bumping based on conventional commits, create version tags,
+and manage releases. Gitver follows the Semantic Versioning 2.0.0 specification.
+
+Examples:
+  gitver init                  # Initialize gitver in your project
+  gitver bump --auto           # Automatically bump version based on commit messages
+  gitver bump --major          # Bump the major version
+  gitver bump --minor          # Bump the minor version
+  gitver bump --patch          # Bump the patch version
+  gitver release               # Create a release tag`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.

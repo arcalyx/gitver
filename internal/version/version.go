@@ -2,12 +2,15 @@ package version
 
 import (
 	"fmt"
-	"github.com/spf13/afero"
-	"gotver/internal/constants"
+	"github.com/arcalyx/gitver/internal/constants"
+	"git
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
 )
 
 var v *Version
@@ -16,6 +19,8 @@ type Version struct {
 	major               int
 	minor               int
 	patch               int
+	preRelease          string
+	preReleaseVersion   int
 	versionFilePath     string
 	versionFileName     string
 	lastVersionFileName string
@@ -32,6 +37,8 @@ func New() *Version {
 	v.major = 0
 	v.minor = 0
 	v.patch = 0
+	v.preRelease = ""
+	v.preReleaseVersion = 0
 	v.versionFilePath = ""
 	v.versionFileName = ""
 	v.lastVersionFileName = ".lastversion"
@@ -40,7 +47,7 @@ func New() *Version {
 	return v
 }
 
-// GetProjectDirectory returns the directory containing the .gotver folder.
+// GetProjectDirectory returns the directory containing the .gitver folder.
 func GetProjectDirectory() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -48,16 +55,16 @@ func GetProjectDirectory() (string, error) {
 	}
 
 	for {
-		// Überprüfen Sie, ob das aktuelle Verzeichnis `.gotver` enthält.
+		// Check if the current directory contains the .gitver folder
 		if _, err := os.Stat(filepath.Join(dir, constants.ConfigFolderName)); !os.IsNotExist(err) {
 			return filepath.Clean(dir), nil
 		}
 
-		// Erhalten Sie das übergeordnete Verzeichnis.
+		// Get the parent directory
 		parentDir := filepath.Dir(dir)
 
-		// Wenn das aktuelle Verzeichnis gleich dem übergeordneten Verzeichnis ist,
-		// dann haben wir das Wurzelverzeichnis erreicht.
+		// If the current directory is the same as the parent directory,
+		// we've reached the root directory
 		if parentDir == dir {
 			break
 		}
@@ -122,6 +129,7 @@ func (v *Version) SetFileName(fileName string) {
 func SafeWriteVersion() error {
 	return v.SafeWriteVersion()
 }
+
 func (v *Version) SafeWriteVersion() error {
 	dir := filepath.Join(v.versionFilePath)
 	versionFilePath := filepath.Join(v.versionFilePath, v.versionFileName)
@@ -148,13 +156,18 @@ func (v *Version) SafeWriteVersion() error {
 func ToString() string {
 	return v.ToString()
 }
+
 func (v *Version) ToString() string {
-	return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+	if v.preRelease == "" {
+		return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+	}
+	return fmt.Sprintf("%d.%d.%d-%s.%d", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion)
 }
 
 func GetLastVersion() string {
 	return v.GetLastVersion()
 }
+
 func (v *Version) GetLastVersion() string {
 	return v.lastVersion
 }
@@ -162,11 +175,48 @@ func (v *Version) GetLastVersion() string {
 func FromString(version string) error {
 	return v.FromString(version)
 }
+
 func (v *Version) FromString(version string) error {
-	_, err := fmt.Sscanf(version, "%d.%d.%d", &v.major, &v.minor, &v.patch)
+	// Regular expression for semantic versioning with optional pre-release
+	semverRegex := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)\.(\d+))?$`)
+	matches := semverRegex.FindStringSubmatch(version)
+
+	if matches == nil {
+		return InputValueError(version)
+	}
+
+	major, err := strconv.Atoi(matches[1])
 	if err != nil {
 		return InputValueError(version)
 	}
+
+	minor, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return InputValueError(version)
+	}
+
+	patch, err := strconv.Atoi(matches[3])
+	if err != nil {
+		return InputValueError(version)
+	}
+
+	v.major = major
+	v.minor = minor
+	v.patch = patch
+
+	// Check if pre-release info is present
+	if len(matches) > 4 && matches[4] != "" {
+		v.preRelease = strings.ToLower(matches[4])
+		preReleaseVersion, err := strconv.Atoi(matches[5])
+		if err != nil {
+			return InputValueError(version)
+		}
+		v.preReleaseVersion = preReleaseVersion
+	} else {
+		v.preRelease = ""
+		v.preReleaseVersion = 0
+	}
+
 	return nil
 }
 
@@ -185,14 +235,14 @@ func (v *Version) WriteVersion() error {
 		}
 		defer source.Close()
 
-		// Zieldatei erstellen
+		// Create destination file
 		destination, err := os.Create(lastVersionFilePath)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer destination.Close()
 
-		// Inhalt kopieren
+		// Copy content
 		_, err = io.Copy(destination, source)
 		if err != nil {
 			log.Fatal(err)
@@ -210,6 +260,7 @@ func (v *Version) WriteVersion() error {
 func BumpMajor() error {
 	return v.BumpMajor()
 }
+
 func (v *Version) BumpMajor() error {
 	v.lastVersion = v.ToString()
 	v.major++
@@ -222,6 +273,7 @@ func (v *Version) BumpMajor() error {
 func BumpMinor() error {
 	return v.BumpMinor()
 }
+
 func (v *Version) BumpMinor() error {
 	v.lastVersion = v.ToString()
 	v.minor++
@@ -233,9 +285,87 @@ func (v *Version) BumpMinor() error {
 func BumpPatch() error {
 	return v.BumpPatch()
 }
+
 func (v *Version) BumpPatch() error {
 	v.lastVersion = v.ToString()
 	v.patch++
+
+	return v.WriteVersion()
+}
+
+// Pre-release version management functions
+func SetPreRelease(preRelease string, version int) error {
+	return v.SetPreRelease(preRelease, version)
+}
+
+func (v *Version) SetPreRelease(preRelease string, version int) error {
+	// Validate pre-release type
+	preRelease = strings.ToLower(preRelease)
+	if preRelease != "alpha" && preRelease != "beta" && preRelease != "rc" && preRelease != "" {
+		return fmt.Errorf("invalid pre-release type: %s (must be alpha, beta, rc, or empty string)", preRelease)
+	}
+
+	v.lastVersion = v.ToString()
+	v.preRelease = preRelease
+	v.preReleaseVersion = version
+
+	return v.WriteVersion()
+}
+
+func BumpPreRelease() error {
+	return v.BumpPreRelease()
+}
+
+func (v *Version) BumpPreRelease() error {
+	if v.preRelease == "" {
+		return fmt.Errorf("no pre-release version set")
+	}
+
+	v.lastVersion = v.ToString()
+	v.preReleaseVersion++
+
+	return v.WriteVersion()
+}
+
+func ClearPreRelease() error {
+	return v.ClearPreRelease()
+}
+
+func (v *Version) ClearPreRelease() error {
+	if v.preRelease == "" {
+		return nil // Already cleared
+	}
+
+	v.lastVersion = v.ToString()
+	v.preRelease = ""
+	v.preReleaseVersion = 0
+
+	return v.WriteVersion()
+}
+
+func PromotePreRelease() error {
+	return v.PromotePreRelease()
+}
+
+func (v *Version) PromotePreRelease() error {
+	if v.preRelease == "" {
+		return fmt.Errorf("no pre-release version set")
+	}
+
+	v.lastVersion = v.ToString()
+
+	// Promote from alpha to beta, beta to rc, or rc to release
+	switch v.preRelease {
+	case "alpha":
+		v.preRelease = "beta"
+		v.preReleaseVersion = 1
+	case "beta":
+		v.preRelease = "rc"
+		v.preReleaseVersion = 1
+	case "rc":
+		v.preRelease = ""
+		v.preReleaseVersion = 0
+	}
 
 	return v.WriteVersion()
 }
