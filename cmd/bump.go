@@ -5,7 +5,8 @@ import (
 	"github.com/arcalyx/gitver/internal/constants"
 	"github.com/arcalyx/gitver/internal/gitops"
 	"github.com/arcalyx/gitver/internal/version"
-	"github.com/go-g
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/spf13/cobra"
 	"log"
 	"strings"
 )

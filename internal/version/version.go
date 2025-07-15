@@ -3,7 +3,7 @@ package version
 import (
 	"fmt"
 	"github.com/arcalyx/gitver/internal/constants"
-	"git
+	"github.com/spf13/afero"
 	"io"
 	"log"
 	"os"
