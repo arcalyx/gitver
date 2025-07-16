@@ -11,16 +11,22 @@ func TestBuildMetadataFunctionality(t *testing.T) {
 	originalVersion := version.ToString()
 	defer func() {
 		// Restore original version after tests
-		version.FromString(originalVersion)
+		err := version.FromString(originalVersion)
+		if err != nil {
+			t.Fatalf("Failed to restore original version: %v", err)
+		}
 	}()
 
 	// Test SetBuildMetadata
 	t.Run("SetBuildMetadata", func(t *testing.T) {
 		// Setup
-		version.FromString("1.2.3")
+		err := version.FromString("1.2.3")
+		if err != nil {
+			t.Fatalf("Failed to set version: %v", err)
+		}
 
 		// Execute
-		err := version.SetBuildMetadata("build.123")
+		err = version.SetBuildMetadata("build.123")
 
 		// Verify
 		assert.NoError(t, err)
@@ -31,10 +37,13 @@ func TestBuildMetadataFunctionality(t *testing.T) {
 	// Test ClearBuildMetadata
 	t.Run("ClearBuildMetadata", func(t *testing.T) {
 		// Setup
-		version.FromString("1.2.3+build.123")
+		err := version.FromString("1.2.3+build.123")
+		if err != nil {
+			t.Fatalf("Failed to set version: %v", err)
+		}
 
 		// Execute
-		err := version.ClearBuildMetadata()
+		err = version.ClearBuildMetadata()
 
 		// Verify
 		assert.NoError(t, err)
@@ -45,13 +54,19 @@ func TestBuildMetadataFunctionality(t *testing.T) {
 	// Test GetBuildMetadata
 	t.Run("GetBuildMetadata", func(t *testing.T) {
 		// Setup
-		version.FromString("1.2.3+build.123")
+		err := version.FromString("1.2.3+build.123")
+		if err != nil {
+			t.Fatalf("Failed to set version: %v", err)
+		}
 
 		// Execute & Verify
 		assert.Equal(t, "build.123", version.GetBuildMetadata())
 
 		// Setup for no build metadata
-		version.FromString("1.2.3")
+		err = version.FromString("1.2.3")
+		if err != nil {
+			t.Fatalf("Failed to set version: %v", err)
+		}
 
 		// Execute & Verify
 		assert.Equal(t, "", version.GetBuildMetadata())

@@ -40,6 +40,13 @@ jobs:
             git add .
             git commit -m "Initial commit for tests"
           fi
+          # Display environment information for debugging
+          echo "Go version:"
+          go version
+          echo "Git version:"
+          git --version
+          echo "Current directory structure:"
+          ls -la
 
       - name: Run tests
         id: run_tests
@@ -58,6 +65,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
+          args: --timeout=5m
 
       - name: Set job status
         id: status
@@ -106,8 +114,10 @@ jobs:
             # For CI environment, read version directly from file
             if [[ -f .gitver/.version ]]; then
               BASE_VERSION=$(cat .gitver/.version)
+              echo "Found version file with version: $BASE_VERSION"
             else
               BASE_VERSION="1.0.0"
+              echo "No version file found, using default: $BASE_VERSION"
             fi
             
             # For nightly builds, append date and commit hash
@@ -115,11 +125,14 @@ jobs:
               COMMIT_HASH=$(git rev-parse --short HEAD)
               DATE=$(date +'%Y%m%d')
               VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
+              echo "Created nightly version: $VERSION"
             else
               VERSION="${BASE_VERSION}"
+              echo "Using standard version: $VERSION"
             fi
           else
             VERSION=${{ github.event.inputs.version }}
+            echo "Using manually specified version: $VERSION"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -129,22 +142,35 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
+          echo "Building for $GOOS/$GOARCH with version ${{ env.VERSION }}"
           OUTPUT="gitver"
           if [ "$GOOS" = "windows" ]; then
             OUTPUT="gitver.exe"
           fi
-          go build -ldflags "-X github.com/arcalyx/gitver/cmd.Version=${{ env.VERSION }}" -o "dist/${OUTPUT}"
+          
+          # Create dist directory first
           mkdir -p dist
+          
+          # Build the binary
+          go build -v -ldflags "-X github.com/arcalyx/gitver/cmd.Version=${{ env.VERSION }}" -o "dist/${OUTPUT}"
+          
+          # Package the binary
           cd dist
           if [ "$GOOS" = "windows" ]; then
             zip -r "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.zip" "${OUTPUT}"
+            echo "Created Windows zip archive"
           else
             tar -czvf "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.tar.gz" "${OUTPUT}"
+            echo "Created tar.gz archive"
           fi
           cd ..
+          
+          # List the contents of the dist directory
+          echo "Contents of dist directory:"
+          ls -la dist/
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gitver_${{ env.VERSION }}_${{ matrix.goos }}_${{ matrix.goarch }}
           path: |
@@ -176,8 +202,10 @@ jobs:
             # For CI environment, read version directly from file
             if [[ -f .gitver/.version ]]; then
               BASE_VERSION=$(cat .gitver/.version)
+              echo "Found version file with version: $BASE_VERSION"
             else
               BASE_VERSION="1.0.0"
+              echo "No version file found, using default: $BASE_VERSION"
             fi
             
             # For nightly builds, append date and commit hash
@@ -185,11 +213,14 @@ jobs:
               COMMIT_HASH=$(git rev-parse --short HEAD)
               DATE=$(date +'%Y%m%d')
               VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
+              echo "Created nightly version: $VERSION"
             else
               VERSION="${BASE_VERSION}"
+              echo "Using standard version: $VERSION"
             fi
           else
             VERSION=${{ github.event.inputs.version }}
+            echo "Using manually specified version: $VERSION"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -197,34 +228,51 @@ jobs:
           # Set release type for later use
           if [[ "${{ github.ref }}" == "refs/heads/nightly" ]]; then
             echo "RELEASE_TYPE=nightly" >> $GITHUB_ENV
+            echo "This is a nightly build"
           else
             echo "RELEASE_TYPE=stable" >> $GITHUB_ENV
+            echo "This is a stable release"
           fi
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Move artifacts to dist
         run: |
           mkdir -p dist
+          echo "Moving artifacts to dist directory"
           find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | xargs -I{} cp {} dist/
+          echo "Contents of dist directory:"
+          ls -la dist/
 
       - name: Generate changelog
         id: changelog
         run: |
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          echo "Latest tag: ${LATEST_TAG:-none}"
+          
           if [[ "${{ env.RELEASE_TYPE }}" == "nightly" ]]; then
+            echo "Generating changelog for nightly build (last 20 commits)"
             git log -n 20 --pretty=format:"* %s (%h)" > CHANGELOG.md
           elif [ -z "$LATEST_TAG" ]; then
+            echo "No previous tag found, including all commits in changelog"
             git log --pretty=format:"* %s (%h)" > CHANGELOG.md
           else
+            echo "Generating changelog since tag $LATEST_TAG"
             git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" > CHANGELOG.md
           fi
+          
           if [ ! -s CHANGELOG.md ]; then
+            echo "No changes found, creating placeholder"
             echo "* No changes" > CHANGELOG.md
           fi
+          
+          echo "Changelog contents:"
+          cat CHANGELOG.md
+          
           echo "changelog<<EOF" >> $GITHUB_OUTPUT
           cat CHANGELOG.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT

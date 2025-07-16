@@ -242,26 +242,6 @@ func isVersionGreater(v1, v2 string) bool {
 	return len(v1Parts) > len(v2Parts)
 }
 
-// Helper function to split a version string into components
-func splitVersion(version string) []int {
-	var components []int
-	var currentComponent int
-
-	for _, c := range version {
-		if c >= '0' && c <= '9' {
-			currentComponent = currentComponent*10 + int(c-'0')
-		} else if c == '.' {
-			components = append(components, currentComponent)
-			currentComponent = 0
-		}
-	}
-
-	// Add the last component
-	components = append(components, currentComponent)
-
-	return components
-}
-
 // Helper function to parse commit messages (similar to what might be in the actual code)
 func parseCommitMessage(commit *object.Commit) (string, string, string, string, string) {
 	// This is a simplified implementation for testing

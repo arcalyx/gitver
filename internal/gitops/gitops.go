@@ -23,7 +23,6 @@ type GitOps struct {
 	email         string
 	repository    *git.Repository
 	worktree      *git.Worktree
-	head          *plumbing.Reference
 	commitMessage string
 	tagMessage    string
 }

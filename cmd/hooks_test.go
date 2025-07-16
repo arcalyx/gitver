@@ -65,7 +65,12 @@ func TestFindGitDir(t *testing.T) {
 	// Save current working directory
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
-	defer os.Chdir(cwd) // Restore original directory after test
+	defer func() {
+		err := os.Chdir(cwd)
+		if err != nil {
+			t.Logf("Failed to restore working directory: %v", err)
+		}
+	}() // Restore original directory after test
 
 	// Change to the nested directory for testing
 	err = os.Chdir(nestedDir)

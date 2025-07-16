@@ -138,7 +138,12 @@ func TestSyncPackagesWithErrors(t *testing.T) {
 	// Note: This might not work on all systems, especially Windows
 	err = os.Chmod(readOnlyDir, 0555)
 	require.NoError(t, err)
-	defer os.Chmod(readOnlyDir, 0755) // Restore permissions for cleanup
+	defer func() {
+		err := os.Chmod(readOnlyDir, 0755) // Restore permissions for cleanup
+		if err != nil {
+			t.Logf("Failed to restore directory permissions: %v", err)
+		}
+	}()
 
 	// Save original projectDir and restore it after test
 	originalProjectDir := projectDir

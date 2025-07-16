@@ -10,10 +10,6 @@ import (
 	"log"
 )
 
-var (
-	buildMetadataValue string
-)
-
 // buildMetaCmd represents the build-meta command
 var buildMetaCmd = &cobra.Command{
 	Use:   "build-meta",
