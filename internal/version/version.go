@@ -3,8 +3,8 @@ package version
 import (
 	"fmt"
 	"github.com/arcalyx/gitver/internal/constants"
+	"github.com/arcalyx/gitver/internal/packagemanagers"
 	"github.com/spf13/afero"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -14,6 +14,7 @@ import (
 )
 
 var v *Version
+var updatePackagesFlag = true
 
 type Version struct {
 	major               int
@@ -228,30 +229,73 @@ func (v *Version) WriteVersion() error {
 	versionFilePath := filepath.Join(v.versionFilePath, v.versionFileName)
 	lastVersionFilePath := filepath.Join(v.versionFilePath, v.lastVersionFileName)
 
-	if _, err := os.Stat(versionFilePath); !os.IsNotExist(err) {
-		source, err := os.Open(versionFilePath)
-		if err != nil {
-			log.Fatal(err)
+	// Create the version file if it doesn't exist
+	if _, err := v.fs.Stat(versionFilePath); os.IsNotExist(err) {
+		// Create the directory if it doesn't exist
+		if err := v.fs.MkdirAll(filepath.Dir(versionFilePath), 0755); err != nil {
+			return err
 		}
-		defer source.Close()
 
-		// Create destination file
-		destination, err := os.Create(lastVersionFilePath)
+		// Create the file
+		file, err := v.fs.Create(versionFilePath)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-		defer destination.Close()
-
-		// Copy content
-		_, err = io.Copy(destination, source)
-		if err != nil {
-			log.Fatal(err)
-		}
+		defer file.Close()
 	}
 
-	err := os.WriteFile(versionFilePath, []byte(v.ToString()), os.ModePerm)
+	// Write the version to the file
+	file, err := v.fs.OpenFile(versionFilePath, os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
-		return WriteOperationFailedError{versionFilePath, err}
+		return err
+	}
+	defer file.Close()
+
+	_, err = fmt.Fprintf(file, "%d.%d.%d", v.major, v.minor, v.patch)
+	if err != nil {
+		return err
+	}
+
+	// Create the last version file if it doesn't exist
+	if _, err := v.fs.Stat(lastVersionFilePath); os.IsNotExist(err) {
+		// Create the directory if it doesn't exist
+		if err := v.fs.MkdirAll(filepath.Dir(lastVersionFilePath), 0755); err != nil {
+			return err
+		}
+
+		// Create the file
+		file, err := v.fs.Create(lastVersionFilePath)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+	}
+
+	// Write the last version to the file
+	file, err = v.fs.OpenFile(lastVersionFilePath, os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	_, err = fmt.Fprintf(file, "%s", v.lastVersion)
+	if err != nil {
+		return err
+	}
+
+	// Update versions in package manager files if the flag is set
+	if updatePackagesFlag {
+		versionString := v.ToString()
+		projectDir, err := GetProjectDirectory()
+		if err == nil {
+			errors := packagemanagers.UpdateAllPackageManagers(projectDir, versionString)
+			if len(errors) > 0 {
+				// Log errors but don't fail the version update
+				for _, err := range errors {
+					log.Printf("Warning: Failed to update package manager file: %v", err)
+				}
+			}
+		}
 	}
 
 	return nil
@@ -368,4 +412,12 @@ func (v *Version) PromotePreRelease() error {
 	}
 
 	return v.WriteVersion()
+}
+
+func SetUpdatePackages(update bool) {
+	updatePackagesFlag = update
+}
+
+func GetUpdatePackages() bool {
+	return updatePackagesFlag
 }

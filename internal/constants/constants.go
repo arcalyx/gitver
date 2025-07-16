@@ -11,3 +11,17 @@ const (
 	ReleaseTag       = "r%s"
 	VersionTag       = "v%s"
 )
+
+// Package manager related constants
+const (
+	MavenPomFile      = "pom.xml"
+	NPMPackageFile    = "package.json"
+	GradleBuildFile   = "build.gradle"
+	KotlinBuildFile   = "build.gradle.kts"
+	GoModFile         = "go.mod"
+	PythonSetupFile   = "setup.py"
+	PyProjectTomlFile = "pyproject.toml"
+
+	PackageUpdateSuccess = "Updated version in %s to %s"
+	PackageUpdateFailed  = "Failed to update version in %s: %v"
+)

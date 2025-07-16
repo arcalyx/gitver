@@ -12,13 +12,14 @@ import (
 )
 
 var (
-	autoFlag   bool
-	majorFlag  bool
-	minorFlag  bool
-	patchFlag  bool
-	commitFlag bool
-	gitFlag    string
-	amend      bool
+	autoFlag       bool
+	majorFlag      bool
+	minorFlag      bool
+	patchFlag      bool
+	commitFlag     bool
+	gitFlag        string
+	amend          bool
+	updatePackages bool
 
 	verbose bool
 )
@@ -59,6 +60,9 @@ Examples:
   gitver bump --git COMMIT_TAG       # Commit and tag the version bump
   gitver bump --git COMMIT_TAG_PUSH  # Commit, tag, and push the version bump`,
 	Run: func(cmd *cobra.Command, args []string) {
+		// Set the updatePackages flag in the version package
+		version.SetUpdatePackages(updatePackages)
+
 		if !validateMode(majorFlag, minorFlag, patchFlag, autoFlag, commitFlag) {
 			log.Fatalf(message0001)
 		}
@@ -94,14 +98,17 @@ Examples:
 
 func init() {
 	rootCmd.AddCommand(bumpCmd)
-	bumpCmd.Flags().BoolVar(&autoFlag, "auto", false, "Automatically determine version bump from commit messages")
-	bumpCmd.Flags().BoolVar(&commitFlag, "commit", false, "Bump version based on the latest commit message")
-	bumpCmd.Flags().BoolVar(&majorFlag, "major", false, "Bump the major version (x.0.0)")
-	bumpCmd.Flags().BoolVar(&minorFlag, "minor", false, "Bump the minor version (0.x.0)")
-	bumpCmd.Flags().BoolVar(&patchFlag, "patch", false, "Bump the patch version (0.0.x)")
-	bumpCmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output")
-	bumpCmd.Flags().BoolVar(&amend, "amend", false, "Amend the previous commit instead of creating a new one")
-	bumpCmd.Flags().StringVar(&gitFlag, "git", "", "Git operations to perform after bumping. Valid values: COMMIT_TAG, COMMIT_TAG_PUSH")
+	bumpCmd.Flags().BoolVarP(&autoFlag, "auto", "a", false, "Automatically determine version bump based on commit messages")
+	bumpCmd.Flags().BoolVarP(&majorFlag, "major", "M", false, "Bump major version")
+	bumpCmd.Flags().BoolVarP(&minorFlag, "minor", "m", false, "Bump minor version")
+	bumpCmd.Flags().BoolVarP(&patchFlag, "patch", "p", false, "Bump patch version")
+	bumpCmd.Flags().BoolVarP(&commitFlag, "commit", "c", false, "Commit version bump")
+	bumpCmd.Flags().StringVarP(&gitFlag, "git", "g", "", "Git operations: COMMIT_TAG, COMMIT_TAG_PUSH")
+	bumpCmd.Flags().BoolVarP(&amend, "amend", "", false, "Amend last commit")
+	bumpCmd.Flags().BoolVarP(&updatePackages, "update-packages", "u", true, "Update version in package manager files (Maven, NPM, Gradle)")
+
+	// Set the flag in the version package
+	version.SetUpdatePackages(updatePackages)
 }
 
 func validateMode(values ...bool) bool {

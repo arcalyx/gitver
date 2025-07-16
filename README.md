@@ -14,6 +14,7 @@ Gitver is a command-line tool that helps you manage semantic versioning in your 
 - **Git Integration**: Create tags, commits, and push changes
 - **Changelog Generation**: Generate changelogs based on commit messages
 - **Version History**: View version history and details
+- **Package Manager Integration**: Automatically update versions in package manager files (Maven, NPM, Gradle, Kotlin Gradle, Go, Python)
 
 ## Installation
 
@@ -76,6 +77,7 @@ Options:
 - `--commit`: Create a commit with the version change
 - `--tag`: Create a tag for the new version
 - `--push`: Push changes to remote repository
+- `--update-packages`: Update version in package manager files (default: true)
 
 ### Prerelease
 
@@ -126,6 +128,25 @@ gitver changelog --from v1.0.0        # Generate changelog from v1.0.0 to HEAD
 gitver changelog --from v1.0.0 --to v2.0.0  # Generate changelog between two tags
 gitver changelog --output CHANGELOG.md      # Save changelog to a file
 gitver changelog --markdown                 # Format output as markdown
+```
+
+## Package Manager Integration
+
+Gitver automatically updates version numbers in popular package manager files when bumping versions. This ensures that your project version is consistent across all files.
+
+Supported package managers:
+
+- **Maven**: Updates version in `pom.xml`
+- **NPM**: Updates version in `package.json`
+- **Gradle**: Updates version in `build.gradle`
+- **Kotlin Gradle**: Updates version in `build.gradle.kts`
+- **Go**: Updates version comment in `go.mod` and updates module path for major versions
+- **Python**: Updates version in `setup.py` and `pyproject.toml` (supports both standard project and Poetry formats)
+
+You can disable this feature using the `--update-packages=false` flag:
+
+```bash
+gitver bump --minor --update-packages=false
 ```
 
 ## Commit Message Format
