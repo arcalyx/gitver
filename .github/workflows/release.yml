@@ -1,0 +1,184 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (without v prefix)'
+        required: true
+        default: '0.0.0'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Run tests
+        run: go test -v ./...
+
+      - name: Run linter
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+
+  build:
+    name: Build and Release
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:
+          - goos: windows
+            goarch: arm64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          cache: true
+
+      - name: Get version from gitver
+        id: get_version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Install gitver to get the current version
+            go install ./...
+            VERSION=$(gitver version --format=semver)
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          OUTPUT="gitver"
+          if [ "$GOOS" = "windows" ]; then
+            OUTPUT="gitver.exe"
+          fi
+          go build -ldflags "-X github.com/arcalyx/gitver/cmd.Version=${{ env.VERSION }}" -o "dist/${OUTPUT}"
+          
+          # Create archive
+          mkdir -p dist
+          cd dist
+          if [ "$GOOS" = "windows" ]; then
+            zip -r "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.zip" "${OUTPUT}"
+          else
+            tar -czvf "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.tar.gz" "${OUTPUT}"
+          fi
+          cd ..
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: gitver_${{ env.VERSION }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: |
+            dist/gitver*
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get version from gitver
+        id: get_version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Install gitver to get the current version
+            go install ./...
+            VERSION=$(gitver version --format=semver)
+          else
+            VERSION=${{ github.event.inputs.version }}
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Move artifacts to dist
+        run: |
+          mkdir -p dist
+          find artifacts -type f -name "*.zip" -o -name "*.tar.gz" | xargs -I{} cp {} dist/
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get the latest tag
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$LATEST_TAG" ]; then
+            # No previous tag, use all commits
+            git log --pretty=format:"* %s (%h)" > CHANGELOG.md
+          else
+            # Use commits since the latest tag
+            git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" > CHANGELOG.md
+          fi
+          
+          # If no commits found, add a placeholder
+          if [ ! -s CHANGELOG.md ]; then
+            echo "* No changes" > CHANGELOG.md
+          fi
+          
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ env.VERSION }}
+          tag_name: v${{ env.VERSION }}
+          body: |
+            ## Gitver v${{ env.VERSION }}
+            
+            ### Changes
+            ${{ steps.changelog.outputs.changelog }}
+            
+            ### Installation
+            
+            #### Using Go
+            ```bash
+            go install github.com/arcalyx/gitver@latest
+            ```
+            
+            #### Binary Download
+            Download the appropriate binary for your platform below.
+          files: dist/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

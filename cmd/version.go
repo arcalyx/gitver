@@ -15,6 +15,7 @@ import (
 var (
 	historyFlag bool
 	countFlag   int
+	formatFlag  string
 )
 
 // versionCmd represents the version command
@@ -29,11 +30,17 @@ it also displays a history of version tags from your Git repository.
 Examples:
   gitver version              # Show current version
   gitver version --history    # Show version history
-  gitver version --history --count 5  # Show last 5 versions`,
+  gitver version --history --count 5  # Show last 5 versions
+  gitver version --format=semver  # Show only the semver string`,
 	Run: func(cmd *cobra.Command, args []string) {
 		loadConfig()
 
-		// Display current version
+		// Display current version based on format
+		if formatFlag == "semver" {
+			fmt.Print(version.ToString())
+			return
+		}
+
 		fmt.Printf("Current version: %s\n", version.ToString())
 
 		if historyFlag {
@@ -79,4 +86,5 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	versionCmd.Flags().BoolVar(&historyFlag, "history", false, "Show version history")
 	versionCmd.Flags().IntVar(&countFlag, "count", 0, "Number of versions to show in history (0 = all)")
+	versionCmd.Flags().StringVar(&formatFlag, "format", "", "Output format (semver)")
 }
