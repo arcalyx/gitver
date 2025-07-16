@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - nightly
   workflow_dispatch:
     inputs:
       version:
@@ -65,7 +66,16 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Install gitver to get the current version
             go install ./...
-            VERSION=$(gitver version --format=semver)
+            
+            # For nightly builds, append date and commit hash
+            if [[ "${{ github.ref }}" == "refs/heads/nightly" ]]; then
+              BASE_VERSION=$(gitver version --format=semver)
+              COMMIT_HASH=$(git rev-parse --short HEAD)
+              DATE=$(date +'%Y%m%d')
+              VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
+            else
+              VERSION=$(gitver version --format=semver)
+            fi
           else
             VERSION=${{ github.event.inputs.version }}
           fi
@@ -117,12 +127,28 @@ jobs:
           if [[ "${{ github.event_name }}" == "push" ]]; then
             # Install gitver to get the current version
             go install ./...
-            VERSION=$(gitver version --format=semver)
+            
+            # For nightly builds, append date and commit hash
+            if [[ "${{ github.ref }}" == "refs/heads/nightly" ]]; then
+              BASE_VERSION=$(gitver version --format=semver)
+              COMMIT_HASH=$(git rev-parse --short HEAD)
+              DATE=$(date +'%Y%m%d')
+              VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
+            else
+              VERSION=$(gitver version --format=semver)
+            fi
           else
             VERSION=${{ github.event.inputs.version }}
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          
+          # Set release type for later use
+          if [[ "${{ github.ref }}" == "refs/heads/nightly" ]]; then
+            echo "RELEASE_TYPE=nightly" >> $GITHUB_ENV
+          else
+            echo "RELEASE_TYPE=stable" >> $GITHUB_ENV
+          fi
 
       - name: Download all artifacts
         uses: actions/download-artifact@v3
@@ -140,7 +166,10 @@ jobs:
           # Get the latest tag
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
-          if [ -z "$LATEST_TAG" ]; then
+          if [[ "${{ env.RELEASE_TYPE }}" == "nightly" ]]; then
+            # For nightly, show recent commits
+            git log -n 20 --pretty=format:"* %s (%h)" > CHANGELOG.md
+          elif [ -z "$LATEST_TAG" ]; then
             # No previous tag, use all commits
             git log --pretty=format:"* %s (%h)" > CHANGELOG.md
           else
@@ -160,10 +189,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Release v${{ env.VERSION }}
-          tag_name: v${{ env.VERSION }}
+          name: ${{ env.RELEASE_TYPE == 'nightly' && 'Nightly Build' || 'Release' }} v${{ env.VERSION }}
+          tag_name: ${{ env.RELEASE_TYPE == 'nightly' && format('nightly-{0}', env.VERSION) || format('v{0}', env.VERSION) }}
           body: |
             ## Gitver v${{ env.VERSION }}
+            ${{ env.RELEASE_TYPE == 'nightly' && '⚠️ This is a nightly build and may contain bugs or incomplete features. Use at your own risk.' || '' }}
             
             ### Changes
             ${{ steps.changelog.outputs.changelog }}
@@ -179,6 +209,6 @@ jobs:
             Download the appropriate binary for your platform below.
           files: dist/*
           draft: false
-          prerelease: false
+          prerelease: ${{ env.RELEASE_TYPE == 'nightly' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
