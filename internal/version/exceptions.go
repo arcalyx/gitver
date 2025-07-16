@@ -27,13 +27,13 @@ func (p FileAlreadyExistsError) Error() string {
 type FileNotFoundError string
 
 func (p FileNotFoundError) Error() string {
-	return fmt.Sprintf("error code: %d - Version File %q Already Exists", fileNotFoundErrorCode, string(p))
+	return fmt.Sprintf("error code: %d - Version File %q Not Found", fileNotFoundErrorCode, string(p))
 }
 
 type FileFormatError string
 
 func (p FileFormatError) Error() string {
-	return fmt.Sprintf("error code: %d - Version File %q Already Exists", fileFormatErrorCode, string(p))
+	return fmt.Sprintf("error code: %d - Invalid Version Format in File %q", fileFormatErrorCode, string(p))
 }
 
 type ProjectDirectoryNotFoundError string
@@ -45,7 +45,7 @@ func (p ProjectDirectoryNotFoundError) Error() string {
 type InputValueError string
 
 func (p InputValueError) Error() string {
-	return fmt.Sprintf("error code: %d - Project Directory not Found %q", inputValueErrorCode, string(p))
+	return fmt.Sprintf("error code: %d - Invalid Version Format %q", inputValueErrorCode, string(p))
 }
 
 type WriteOperationFailedError struct {
@@ -54,5 +54,5 @@ type WriteOperationFailedError struct {
 }
 
 func (p WriteOperationFailedError) Error() string {
-	return fmt.Sprintf("error code: %d - Project Directory not Found %q %q", writeOperationFailedErrorCode, p.file, p.error)
+	return fmt.Sprintf("error code: %d - Failed to Write to File %q: %v", writeOperationFailedErrorCode, p.file, p.error)
 }

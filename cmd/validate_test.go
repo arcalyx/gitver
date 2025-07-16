@@ -131,11 +131,9 @@ func TestValidateVersionFormat(t *testing.T) {
 	}{
 		{"Valid semantic version", "1.2.3", true},
 		{"Valid with pre-release", "1.2.3-alpha.1", true},
-		{"Valid with build metadata", "1.2.3+build.123", true},
-		{"Valid complex version", "1.2.3-beta.2+build.456", true},
-		// The current implementation only validates that the version starts with three integers separated by dots
-		// It doesn't validate that there are no additional characters, so "1.2.3a" is actually accepted
-		{"Invalid characters", "1.2.3a", true}, // Changed to true to match actual behavior
+		{"Valid with build metadata", "1.2.3+build.123", true},    // Now valid with our enhanced parser
+		{"Valid complex version", "1.2.3-beta.2+build.456", true}, // Now valid with our enhanced parser
+		{"Invalid characters", "1.2.3a", false},
 		{"Invalid format", "1.2", false},
 		{"Empty version", "", false},
 	}

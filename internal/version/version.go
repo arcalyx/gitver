@@ -16,12 +16,14 @@ import (
 var v *Version
 var updatePackagesFlag = true
 
+// Version represents a semantic version
 type Version struct {
 	major               int
 	minor               int
 	patch               int
 	preRelease          string
 	preReleaseVersion   int
+	buildMetadata       string
 	versionFilePath     string
 	versionFileName     string
 	lastVersionFileName string
@@ -40,6 +42,7 @@ func New() *Version {
 	v.patch = 0
 	v.preRelease = ""
 	v.preReleaseVersion = 0
+	v.buildMetadata = ""
 	v.versionFilePath = ""
 	v.versionFileName = ""
 	v.lastVersionFileName = ".lastversion"
@@ -89,8 +92,9 @@ func (v *Version) ReadVersion() error {
 		return FileNotFoundError(versionFilePath)
 	}
 
-	_, err = fmt.Sscanf(string(data), "%d.%d.%d", &v.major, &v.minor, &v.patch)
-	if err != nil {
+	// Use FromString to parse the version with proper regex validation
+	versionStr := strings.TrimSpace(string(data))
+	if err := v.FromString(versionStr); err != nil {
 		return FileFormatError(versionFilePath)
 	}
 
@@ -159,10 +163,15 @@ func ToString() string {
 }
 
 func (v *Version) ToString() string {
-	if v.preRelease == "" {
+	if v.preRelease == "" && v.buildMetadata == "" {
 		return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+	} else if v.preRelease != "" && v.buildMetadata == "" {
+		return fmt.Sprintf("%d.%d.%d-%s.%d", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion)
+	} else if v.preRelease == "" && v.buildMetadata != "" {
+		return fmt.Sprintf("%d.%d.%d+%s", v.major, v.minor, v.patch, v.buildMetadata)
+	} else {
+		return fmt.Sprintf("%d.%d.%d-%s.%d+%s", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion, v.buildMetadata)
 	}
-	return fmt.Sprintf("%d.%d.%d-%s.%d", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion)
 }
 
 func GetLastVersion() string {
@@ -178,8 +187,8 @@ func FromString(version string) error {
 }
 
 func (v *Version) FromString(version string) error {
-	// Regular expression for semantic versioning with optional pre-release
-	semverRegex := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)\.(\d+))?$`)
+	// Regular expression for semantic versioning with optional pre-release and build metadata
+	semverRegex := regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([a-zA-Z]+)\.(\d+))?(?:\+([0-9A-Za-z-.]+))?$`)
 	matches := semverRegex.FindStringSubmatch(version)
 
 	if matches == nil {
@@ -218,6 +227,13 @@ func (v *Version) FromString(version string) error {
 		v.preReleaseVersion = 0
 	}
 
+	// Check if build metadata is present
+	if len(matches) > 6 && matches[6] != "" {
+		v.buildMetadata = matches[6]
+	} else {
+		v.buildMetadata = ""
+	}
+
 	return nil
 }
 
@@ -251,7 +267,7 @@ func (v *Version) WriteVersion() error {
 	}
 	defer file.Close()
 
-	_, err = fmt.Fprintf(file, "%d.%d.%d", v.major, v.minor, v.patch)
+	_, err = fmt.Fprintf(file, "%s", v.ToString())
 	if err != nil {
 		return err
 	}
@@ -420,4 +436,132 @@ func SetUpdatePackages(update bool) {
 
 func GetUpdatePackages() bool {
 	return updatePackagesFlag
+}
+
+// Compare compares this version with another version following SemVer 2.0.0 specification
+// Returns:
+//
+//	-1 if this version is less than the other version
+//	 0 if this version is equal to the other version
+//	 1 if this version is greater than the other version
+//
+// Note: Build metadata is ignored in version precedence as per SemVer 2.0.0 spec
+func (v *Version) Compare(other *Version) int {
+	// Compare major version
+	if v.major != other.major {
+		if v.major > other.major {
+			return 1
+		}
+		return -1
+	}
+
+	// Compare minor version
+	if v.minor != other.minor {
+		if v.minor > other.minor {
+			return 1
+		}
+		return -1
+	}
+
+	// Compare patch version
+	if v.patch != other.patch {
+		if v.patch > other.patch {
+			return 1
+		}
+		return -1
+	}
+
+	// If one has a pre-release and the other doesn't, the one without is greater
+	if v.preRelease == "" && other.preRelease != "" {
+		return 1
+	}
+	if v.preRelease != "" && other.preRelease == "" {
+		return -1
+	}
+
+	// If both have pre-releases, compare them
+	if v.preRelease != "" && other.preRelease != "" {
+		// Compare pre-release types (alpha < beta < rc)
+		if v.preRelease != other.preRelease {
+			if v.preRelease == "alpha" {
+				return -1
+			}
+			if other.preRelease == "alpha" {
+				return 1
+			}
+			if v.preRelease == "beta" {
+				return -1
+			}
+			if other.preRelease == "beta" {
+				return 1
+			}
+		}
+
+		// Compare pre-release versions
+		if v.preReleaseVersion != other.preReleaseVersion {
+			if v.preReleaseVersion > other.preReleaseVersion {
+				return 1
+			}
+			return -1
+		}
+	}
+
+	// Versions are equal (build metadata doesn't affect precedence)
+	return 0
+}
+
+// SetBuildMetadata sets the build metadata for the version
+// Build metadata is specified by appending a plus sign and a series of dot-separated identifiers
+// immediately following the patch or pre-release version
+func (v *Version) SetBuildMetadata(buildMetadata string) error {
+	// Save the current version as the last version
+	v.lastVersion = v.ToString()
+
+	// Validate build metadata format (alphanumeric and hyphen only, dot-separated)
+	if buildMetadata != "" {
+		for _, part := range strings.Split(buildMetadata, ".") {
+			if !regexp.MustCompile(`^[0-9A-Za-z-]+$`).MatchString(part) {
+				return InputValueError(fmt.Sprintf("invalid build metadata: %s (must contain only alphanumeric characters and hyphens)", buildMetadata))
+			}
+		}
+	}
+
+	v.buildMetadata = buildMetadata
+	return v.WriteVersion()
+}
+
+// ClearBuildMetadata removes the build metadata from the version
+func (v *Version) ClearBuildMetadata() error {
+	// Save the current version as the last version
+	v.lastVersion = v.ToString()
+
+	v.buildMetadata = ""
+	return v.WriteVersion()
+}
+
+// GetBuildMetadata returns the build metadata for the version
+func (v *Version) GetBuildMetadata() string {
+	return v.buildMetadata
+}
+
+func SetBuildMetadata(buildMetadata string) error {
+	return v.SetBuildMetadata(buildMetadata)
+}
+
+func ClearBuildMetadata() error {
+	return v.ClearBuildMetadata()
+}
+
+func GetBuildMetadata() string {
+	return v.GetBuildMetadata()
+}
+
+// GetFileSystem returns the current file system used by the version package
+func GetFileSystem() afero.Fs {
+	return v.fs
+}
+
+// SetFileSystem sets the file system to use for the version package
+func SetFileSystem(fs afero.Fs) {
+	v.fs = fs
 }

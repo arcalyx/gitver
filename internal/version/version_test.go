@@ -2,8 +2,11 @@ package version
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // TestVersion is a simplified version of Version for testing
@@ -23,6 +26,7 @@ type MockVersion struct {
 	preRelease        string
 	preReleaseVersion int
 	lastVersion       string
+	buildMetadata     string
 }
 
 // NewMockVersion creates a new MockVersion instance
@@ -53,6 +57,7 @@ func (v *MockVersion) FromString(version string) error {
 	v.preRelease = realVersion.preRelease
 	v.preReleaseVersion = realVersion.preReleaseVersion
 	v.lastVersion = realVersion.lastVersion
+	v.buildMetadata = realVersion.buildMetadata
 
 	return nil
 }
@@ -60,9 +65,15 @@ func (v *MockVersion) FromString(version string) error {
 // ToString returns the string representation of the MockVersion
 func (v *MockVersion) ToString() string {
 	if v.preRelease == "" {
-		return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+		if v.buildMetadata == "" {
+			return fmt.Sprintf("%d.%d.%d", v.major, v.minor, v.patch)
+		}
+		return fmt.Sprintf("%d.%d.%d+%s", v.major, v.minor, v.patch, v.buildMetadata)
 	}
-	return fmt.Sprintf("%d.%d.%d-%s.%d", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion)
+	if v.buildMetadata == "" {
+		return fmt.Sprintf("%d.%d.%d-%s.%d", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion)
+	}
+	return fmt.Sprintf("%d.%d.%d-%s.%d+%s", v.major, v.minor, v.patch, v.preRelease, v.preReleaseVersion, v.buildMetadata)
 }
 
 // SetPreRelease sets the pre-release type and version
@@ -122,6 +133,112 @@ func (v *MockVersion) ClearPreRelease() error {
 	v.preRelease = ""
 	v.preReleaseVersion = 0
 	return nil
+}
+
+// Compare compares this version with another version following SemVer 2.0.0 specification
+// Returns:
+//
+//	-1 if this version is less than the other version
+//	 0 if this version is equal to the other version
+//	 1 if this version is greater than the other version
+//
+// Note: Build metadata is ignored in version precedence as per SemVer 2.0.0 spec
+func (v *MockVersion) Compare(other *MockVersion) int {
+	// Compare major version
+	if v.major != other.major {
+		if v.major > other.major {
+			return 1
+		}
+		return -1
+	}
+
+	// Compare minor version
+	if v.minor != other.minor {
+		if v.minor > other.minor {
+			return 1
+		}
+		return -1
+	}
+
+	// Compare patch version
+	if v.patch != other.patch {
+		if v.patch > other.patch {
+			return 1
+		}
+		return -1
+	}
+
+	// If one has a pre-release and the other doesn't, the one without is greater
+	if v.preRelease == "" && other.preRelease != "" {
+		return 1
+	}
+	if v.preRelease != "" && other.preRelease == "" {
+		return -1
+	}
+
+	// If both have pre-releases, compare them
+	if v.preRelease != "" && other.preRelease != "" {
+		// Compare pre-release types (alpha < beta < rc)
+		if v.preRelease != other.preRelease {
+			if v.preRelease == "alpha" {
+				return -1
+			}
+			if other.preRelease == "alpha" {
+				return 1
+			}
+			if v.preRelease == "beta" {
+				return -1
+			}
+			if other.preRelease == "beta" {
+				return 1
+			}
+		}
+
+		// Compare pre-release versions
+		if v.preReleaseVersion != other.preReleaseVersion {
+			if v.preReleaseVersion > other.preReleaseVersion {
+				return 1
+			}
+			return -1
+		}
+	}
+
+	// Versions are equal (build metadata doesn't affect precedence)
+	return 0
+}
+
+// SetBuildMetadata sets the build metadata for the version
+// Build metadata is specified by appending a plus sign and a series of dot-separated identifiers
+// immediately following the patch or pre-release version
+func (v *MockVersion) SetBuildMetadata(buildMetadata string) error {
+	// Save the current version as the last version
+	v.lastVersion = v.ToString()
+
+	// Validate build metadata format (alphanumeric and hyphen only, dot-separated)
+	if buildMetadata != "" {
+		for _, part := range strings.Split(buildMetadata, ".") {
+			if !regexp.MustCompile(`^[0-9A-Za-z-]+$`).MatchString(part) {
+				return fmt.Errorf("invalid build metadata: %s (must contain only alphanumeric characters and hyphens)", buildMetadata)
+			}
+		}
+	}
+
+	v.buildMetadata = buildMetadata
+	return nil
+}
+
+// ClearBuildMetadata removes the build metadata from the version
+func (v *MockVersion) ClearBuildMetadata() error {
+	// Save the current version as the last version
+	v.lastVersion = v.ToString()
+
+	v.buildMetadata = ""
+	return nil
+}
+
+// GetBuildMetadata returns the build metadata for the version
+func (v *MockVersion) GetBuildMetadata() string {
+	return v.buildMetadata
 }
 
 func setupTestVersion() *MockVersion {
@@ -361,11 +478,127 @@ func TestVersionParsing(t *testing.T) {
 	}
 }
 
+func TestVersionParsingWithBuildMetadata(t *testing.T) {
+	testCases := []struct {
+		version       string
+		major         int
+		minor         int
+		patch         int
+		preRelease    string
+		preReleaseVer int
+		buildMetadata string
+		shouldBeValid bool
+	}{
+		{"1.2.3", 1, 2, 3, "", 0, "", true},
+		{"1.2.3+build.123", 1, 2, 3, "", 0, "build.123", true},
+		{"1.2.3-alpha.1+build.456", 1, 2, 3, "alpha", 1, "build.456", true},
+		{"1.2.3-beta.5+sha.abc123", 1, 2, 3, "beta", 5, "sha.abc123", true},
+		{"1.2.3+", 0, 0, 0, "", 0, "", false},
+		{"1.2.3++extra", 0, 0, 0, "", 0, "", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.version, func(t *testing.T) {
+			v := NewMockVersion()
+			err := v.FromString(tc.version)
+
+			if tc.shouldBeValid {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.major, v.major)
+				assert.Equal(t, tc.minor, v.minor)
+				assert.Equal(t, tc.patch, v.patch)
+				assert.Equal(t, tc.preRelease, v.preRelease)
+				assert.Equal(t, tc.preReleaseVer, v.preReleaseVersion)
+				assert.Equal(t, tc.buildMetadata, v.buildMetadata)
+
+				// Test that ToString() correctly formats the version
+				assert.Equal(t, tc.version, v.ToString())
+			} else {
+				assert.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestBuildMetadataMethods(t *testing.T) {
+	tests := []struct {
+		name           string
+		initialVersion string
+		buildMetadata  string
+		expectedResult string
+		expectError    bool
+	}{
+		{
+			name:           "Set valid build metadata on regular version",
+			initialVersion: "1.2.3",
+			buildMetadata:  "build.123",
+			expectedResult: "1.2.3+build.123",
+			expectError:    false,
+		},
+		{
+			name:           "Set valid build metadata on pre-release version",
+			initialVersion: "1.2.3-alpha.1",
+			buildMetadata:  "sha.abc123",
+			expectedResult: "1.2.3-alpha.1+sha.abc123",
+			expectError:    false,
+		},
+		{
+			name:           "Set invalid build metadata (spaces)",
+			initialVersion: "1.2.3",
+			buildMetadata:  "build 123",
+			expectedResult: "1.2.3",
+			expectError:    true,
+		},
+		{
+			name:           "Set invalid build metadata (special chars)",
+			initialVersion: "1.2.3",
+			buildMetadata:  "build@123",
+			expectedResult: "1.2.3",
+			expectError:    true,
+		},
+		{
+			name:           "Clear build metadata",
+			initialVersion: "1.2.3+build.123",
+			buildMetadata:  "",
+			expectedResult: "1.2.3",
+			expectError:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := NewMockVersion()
+			err := v.FromString(tt.initialVersion)
+			assert.NoError(t, err)
+
+			if tt.buildMetadata == "" {
+				// Test ClearBuildMetadata
+				err = v.ClearBuildMetadata()
+				assert.NoError(t, err)
+			} else {
+				// Test SetBuildMetadata
+				err = v.SetBuildMetadata(tt.buildMetadata)
+				if tt.expectError {
+					assert.Error(t, err)
+				} else {
+					assert.NoError(t, err)
+				}
+			}
+
+			// Verify the result
+			if !tt.expectError {
+				assert.Equal(t, tt.expectedResult, v.ToString())
+				assert.Equal(t, tt.buildMetadata, v.GetBuildMetadata())
+			}
+		})
+	}
+}
+
 func TestVersionComparison(t *testing.T) {
 	tests := []struct {
 		v1       string
 		v2       string
-		expected int
+		expected int // -1 if v1 < v2, 0 if v1 == v2, 1 if v1 > v2
 	}{
 		{"1.0.0", "1.0.0", 0},
 		{"1.0.0", "1.0.1", -1},
@@ -382,27 +615,26 @@ func TestVersionComparison(t *testing.T) {
 		{"1.0.0-beta.1", "1.0.0-alpha.1", 1},
 		{"1.0.0-beta.1", "1.0.0-rc.1", -1},
 		{"1.0.0-rc.1", "1.0.0-beta.1", 1},
+		// Test cases with build metadata - should be ignored in comparison
+		{"1.0.0+build.1", "1.0.0+build.2", 0},
+		{"1.0.0-alpha.1+build.1", "1.0.0-alpha.1+build.2", 0},
+		{"1.0.0+build.1", "1.0.0", 0},
+		{"1.0.0-alpha.1+build.1", "1.0.0-alpha.1", 0},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.v1+" vs "+tt.v2, func(t *testing.T) {
-			v1 := New() // Use the real Version for comparison tests
+		t.Run(fmt.Sprintf("%s_vs_%s", tt.v1, tt.v2), func(t *testing.T) {
+			v1 := NewMockVersion()
 			err := v1.FromString(tt.v1)
-			if err != nil {
-				t.Fatalf("Failed to parse version %s: %v", tt.v1, err)
-			}
+			assert.NoError(t, err)
 
-			v2 := New() // Use the real Version for comparison tests
+			v2 := NewMockVersion()
 			err = v2.FromString(tt.v2)
-			if err != nil {
-				t.Fatalf("Failed to parse version %s: %v", tt.v2, err)
-			}
+			assert.NoError(t, err)
 
-			// Since Compare method doesn't exist, we'll implement a simple comparison here
-			result := compareVersions(v1, v2)
-			if result != tt.expected {
-				t.Errorf("Expected comparison result %d, got %d for %s vs %s", tt.expected, result, tt.v1, tt.v2)
-			}
+			// Use the new Compare method
+			result := v1.Compare(v2)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }

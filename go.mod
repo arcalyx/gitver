@@ -1,3 +1,4 @@
+// Version: 1.2.3
 module github.com/arcalyx/gitver
 
 go 1.21.0

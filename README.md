@@ -11,6 +11,7 @@ Gitver is a command-line tool that helps you manage semantic versioning in your 
 - **Version Bumping**: Easily bump major, minor, or patch versions
 - **Auto Bump**: Automatically determine version bump based on commit messages
 - **Pre-release Support**: Manage alpha, beta, and release candidate versions
+- **Build Metadata Support**: Include build metadata in version strings (e.g., 1.2.3+build.123)
 - **Git Integration**: Create tags, commits, and push changes
 - **Changelog Generation**: Generate changelogs based on commit messages
 - **Version History**: View version history and details
@@ -53,6 +54,33 @@ gitver release
 ```
 
 ## Commands
+
+### Basic Commands
+
+- `gitver init`: Initialize gitver in your project
+- `gitver bump`: Bump the version of the project
+  - `--major`: Bump the major version
+  - `--minor`: Bump the minor version
+  - `--patch`: Bump the patch version
+  - `--auto`: Automatically determine version bump based on commit messages
+- `gitver version`: Display version information
+
+### Pre-release Commands
+
+- `gitver prerelease set <type> <version>`: Set pre-release version (alpha, beta, rc)
+- `gitver prerelease bump`: Bump pre-release version
+- `gitver prerelease promote`: Promote pre-release to next level (alpha → beta → rc → release)
+- `gitver prerelease clear`: Clear pre-release version
+
+### Build Metadata Commands
+
+- `gitver build-meta set <metadata>`: Set build metadata (e.g., build.123, sha.abc123)
+- `gitver build-meta clear`: Clear build metadata
+- `gitver build-meta show`: Display current build metadata
+
+### Release Commands
+
+- `gitver release`: Create a release tag for the current version
 
 ### Init
 
@@ -97,6 +125,33 @@ Options:
 - `--tag`: Create a tag for the new version
 - `--push`: Push changes to remote repository
 
+### Build Metadata
+
+Gitver supports build metadata in version strings as per the SemVer 2.0.0 specification. Build metadata is specified by appending a plus sign and a series of dot-separated identifiers immediately following the patch or pre-release version.
+
+Examples of valid version strings with build metadata:
+```
+1.2.3+build.123
+1.2.3-alpha.1+build.456
+1.2.3-beta.5+sha.abc123
+```
+
+Build metadata is supported in all version operations and is preserved when reading/writing versions. Note that build metadata does not affect version precedence - versions with the same version numbers but different build metadata are considered equal.
+
+To set or modify build metadata, use the `version` command with the full version string:
+
+```bash
+gitver version 1.2.3+build.123
+```
+
+Alternatively, you can use the `build-meta` commands to set, clear, or display build metadata:
+
+```bash
+gitver build-meta set build.123
+gitver build-meta clear
+gitver build-meta show
+```
+
 ### Release
 
 Create a release tag:
@@ -132,9 +187,7 @@ gitver changelog --markdown                 # Format output as markdown
 
 ## Package Manager Integration
 
-Gitver automatically updates version numbers in popular package manager files when bumping versions. This ensures that your project version is consistent across all files.
-
-Supported package managers:
+Gitver can automatically update version numbers in various package manager files:
 
 - **Maven**: Updates version in `pom.xml`
 - **NPM**: Updates version in `package.json`
@@ -148,6 +201,25 @@ You can disable this feature using the `--update-packages=false` flag:
 ```bash
 gitver bump --minor --update-packages=false
 ```
+
+## Build Metadata in SemVer 2.0.0
+
+According to the [SemVer 2.0.0 specification](https://semver.org/), build metadata is specified by appending a plus sign and a series of dot-separated identifiers immediately following the patch or pre-release version:
+
+```
+1.0.0+build.1
+1.2.3-alpha.1+build.123
+```
+
+Build metadata is used to provide additional information about a build but does not affect version precedence. This means that `1.0.0+build.1` and `1.0.0+build.2` are considered equal in terms of precedence.
+
+Gitver fully supports build metadata in accordance with the SemVer 2.0.0 specification:
+
+1. Build metadata can be added to any version (regular or pre-release)
+2. Build metadata is preserved during version operations but ignored in version comparisons
+3. Build metadata identifiers can only contain alphanumeric characters and hyphens [0-9A-Za-z-]
+4. Build metadata identifiers cannot be empty
+5. Build metadata is dot-separated (e.g., `build.123`, `sha.abc123.date.20250716`)
 
 ## Git Hooks
 
