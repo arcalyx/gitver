@@ -273,9 +273,9 @@ jobs:
           echo "Changelog contents:"
           cat CHANGELOG.md
           
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo 'changelog<<CHANGELOG_DELIMITER' >> $GITHUB_OUTPUT
           cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo 'CHANGELOG_DELIMITER' >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1

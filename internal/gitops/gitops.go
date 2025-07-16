@@ -269,7 +269,7 @@ func (g *GitOps) GetHeadCommit() (*object.Commit, error) {
 
 	commit, err := g.repository.CommitObject(headRef.Hash())
 	if err != nil {
-
+		return nil, err
 	}
 
 	return commit, nil

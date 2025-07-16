@@ -64,7 +64,7 @@ Examples:
 		version.SetUpdatePackages(updatePackages)
 
 		if !validateMode(majorFlag, minorFlag, patchFlag, autoFlag, commitFlag) {
-			log.Fatalf(message0001)
+			log.Fatal(message0001)
 		}
 
 		loadConfig()
@@ -193,16 +193,16 @@ func detectAutoBump() (func() error, error) {
 }
 
 func analyzeCommits(tag string) (func() error, error) {
-	logf("analyze commits from head to %s...", tag)
+	log.Println("analyze commits from head to", tag)
 	commits, err := gitops.GetCommits(tag)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	logf("%d commits found", len(commits))
+	log.Println(len(commits), "commits found")
 
 	priority := findCommitPriority(commits)
-	logf("bump priority are: %d", priority)
+	log.Println("bump priority are:", priority)
 	switch priority {
 	case PriorityBreakingChange:
 		return version.BumpMajor, nil
@@ -216,22 +216,22 @@ func analyzeCommits(tag string) (func() error, error) {
 }
 
 func analyzeAndCompareCommits(starttag, endtag string) (func() error, error) {
-	logf("analyze commits from %s to %s...", starttag, endtag)
+	log.Println("analyze commits from", starttag, "to", endtag)
 	oldCommits, err := gitops.GetCommitsBetweenTags(starttag, endtag)
 	if err != nil {
 		log.Fatal(err)
 	}
-	logf("%d commits found", len(oldCommits))
+	log.Println(len(oldCommits), "commits found")
 
-	logf("analyze commits from head to %s...", starttag)
+	log.Println("analyze commits from head to", starttag)
 	newCommits, err := gitops.GetCommits(starttag)
 	if err != nil {
 		log.Fatal(err)
 	}
-	logf("%d commits found", len(newCommits))
+	log.Println(len(newCommits), "commits found")
 
 	priority := comparePriority(findCommitPriority(oldCommits), findCommitPriority(newCommits))
-	logf("bump priority are: %d", priority)
+	log.Println("bump priority are:", priority)
 	switch priority {
 	case PriorityBreakingChange:
 		return version.BumpMajor, nil
@@ -300,13 +300,13 @@ func findCommitPriority(commits []*object.Commit) int {
 		message := commit.Message
 
 		if strings.Contains(message, "BREAKING CHANGE:") {
-			logf("BREAKING CHANGE found: %s", commit.Hash)
+			log.Println("BREAKING CHANGE found:", commit.Hash)
 			return PriorityBreakingChange
 		} else if strings.Contains(message, "feat:") && highestPriority < PriorityFeat {
-			logf("FEATURE found: %s", commit.Hash)
+			log.Println("FEATURE found:", commit.Hash)
 			highestPriority = PriorityFeat
 		} else if strings.Contains(message, "fix:") && highestPriority < PriorityFix {
-			logf("FIX found: %s", commit.Hash)
+			log.Println("FIX found:", commit.Hash)
 			highestPriority = PriorityFix
 		}
 	}

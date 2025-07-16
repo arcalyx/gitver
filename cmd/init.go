@@ -29,18 +29,18 @@ Example:
 	Run: func(cmd *cobra.Command, args []string) {
 		err := version.FromString(versionFlag)
 		if err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err)
 		}
 
 		err = version.SafeWriteVersion()
 		if err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err)
 			return
 		}
 
 		err = viper.SafeWriteConfig()
 		if err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal(err)
 			return
 		}
 

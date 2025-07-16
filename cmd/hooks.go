@@ -291,7 +291,7 @@ fi
 # Check for keyword in last commit message
 KEYWORD="%s"
 if [ -n "$KEYWORD" ]; then
-    LAST_COMMIT_MSG=$(git log -1 --pretty=%B)
+    LAST_COMMIT_MSG=$(git log -1 --pretty=%%B)
     if ! echo "$LAST_COMMIT_MSG" | grep -q "$KEYWORD"; then
         # If keyword is not found, just exit with success
         # This allows pushes without the keyword to proceed without version checks
@@ -334,7 +334,7 @@ fi
 # Check for keyword in merge commit message
 KEYWORD="%s"
 if [ -n "$KEYWORD" ]; then
-    MERGE_MSG=$(git log -1 --pretty=%B)
+    MERGE_MSG=$(git log -1 --pretty=%%B)
     if ! echo "$MERGE_MSG" | grep -q "$KEYWORD"; then
         # If keyword is not found, just exit with success
         # This allows merges without the keyword to proceed without version updates
