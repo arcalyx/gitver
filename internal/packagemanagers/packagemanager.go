@@ -446,3 +446,40 @@ func (p *PyProjectTomlPackageManager) UpdateVersion(projectDir, newVersion strin
 
 	return nil
 }
+
+// CheckVersionInFile checks if the specified version exists in the given file
+// This is a simplified check that looks for the version string in the file
+func CheckVersionInFile(filePath, version string) bool {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return false
+	}
+
+	content := string(data)
+
+	// For different file types, we might need different patterns
+	// This is a simplified approach that just checks if the version string exists
+	// A more robust implementation would parse each file format properly
+
+	// Check for version with quotes (for JSON, TOML, etc.)
+	if strings.Contains(content, fmt.Sprintf("\"%s\"", version)) {
+		return true
+	}
+
+	// Check for version with single quotes (for some build files)
+	if strings.Contains(content, fmt.Sprintf("'%s'", version)) {
+		return true
+	}
+
+	// Check for version as a comment (for Go modules)
+	if strings.Contains(content, fmt.Sprintf("// Version: %s", version)) {
+		return true
+	}
+
+	// Check for raw version string (fallback)
+	if strings.Contains(content, version) {
+		return true
+	}
+
+	return false
+}

@@ -5,7 +5,7 @@ const (
 	ConfigName       = "config"
 	ConfigType       = "yaml"
 	ConfigFolderName = ".gitver"
-	ProgrammName     = "gitver"
+	ProgramName      = "gitver"
 	TagMessage       = "Tagged by gitver"
 	CommitMessage    = "Bump Version [%s] -> [%s]"
 	ReleaseTag       = "r%s"

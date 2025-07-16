@@ -11,9 +11,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	exitWithError bool   // Used to indicate if the program should exit with an error code
+	projectDir    string // Project directory path, used across the cmd package
+)
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   constants.ProgrammName,
+	Use:   constants.ProgramName,
 	Short: "A Git-based semantic versioning tool",
 	Long: `Gitver is a command-line tool for managing semantic versioning in Git repositories.
 	
@@ -33,7 +38,7 @@ Examples:
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	err := rootCmd.Execute()
-	if err != nil {
+	if err != nil || exitWithError {
 		os.Exit(1)
 	}
 }
@@ -48,7 +53,8 @@ func init() {
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
 
-	projectDir, err := version.GetProjectDirectory()
+	var err error
+	projectDir, err = version.GetProjectDirectory()
 	if err != nil {
 		projectDir, err = os.Getwd()
 		if err != nil {

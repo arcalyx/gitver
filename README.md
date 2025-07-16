@@ -149,6 +149,47 @@ You can disable this feature using the `--update-packages=false` flag:
 gitver bump --minor --update-packages=false
 ```
 
+## Git Hooks
+
+Gitver can install Git hooks to automate version management tasks in your workflow:
+
+```bash
+gitver hooks --install-all                # Install all supported hooks
+gitver hooks --pre-commit                 # Install only the pre-commit hook
+gitver hooks --pre-commit --keyword=bump  # Install hook that triggers on "bump" keyword
+gitver hooks --remove                     # Remove all gitver hooks
+```
+
+### Available Hooks
+
+- **pre-commit**: Validates version consistency before commits
+- **pre-push**: Ensures version is properly updated before pushing
+- **post-merge**: Updates package versions after merging
+
+### Keyword Triggers
+
+You can specify a keyword that must be present in commit messages to trigger version-related actions:
+
+```bash
+gitver hooks --install-all --keyword=version
+```
+
+With this configuration:
+- Only commits containing the word "version" will trigger version validation
+- Only pushes with commit messages containing "version" will check for needed version bumps
+- Only merges with commit messages containing "version" will automatically sync package versions
+
+This allows you to control when version management is performed based on your commit messages.
+
+### Supporting Commands
+
+The hooks use these commands which you can also run manually:
+
+```bash
+gitver validate       # Check version consistency across package files
+gitver sync-packages  # Update all package files to match the current version
+```
+
 ## Commit Message Format
 
 Gitver follows the [Conventional Commits](https://www.conventionalcommits.org/) specification for parsing commit messages when using the `--auto` flag:
