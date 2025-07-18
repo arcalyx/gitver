@@ -13,9 +13,34 @@ on:
         default: '0.0.0'
 
 jobs:
+  check_commit:
+    name: Check Commit Message
+    runs-on: ubuntu-latest
+    outputs:
+      is_prerelease: ${{ steps.check_message.outputs.is_prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      
+      - name: Check for prerelease keyword
+        id: check_message
+        run: |
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if [[ "$COMMIT_MSG" == *"#prerelease"* ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "Prerelease build detected"
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "Standard build detected"
+          fi
+
   test:
     name: Test and Lint
     runs-on: ubuntu-latest
+    needs: check_commit
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -29,35 +54,11 @@ jobs:
           go-version: '1.21'
           cache: true
 
-      - name: Setup test environment
-        run: |
-          mkdir -p .gitver
-          echo "1.2.3" > .gitver/.version
-          git config --global user.email "test@example.com"
-          git config --global user.name "Test User"
-          if [ ! -d .git ]; then
-            git init
-            git add .
-            git commit -m "Initial commit for tests"
-          fi
-          # Display environment information for debugging
-          echo "Go version:"
-          go version
-          echo "Git version:"
-          git --version
-          echo "Current directory structure:"
-          ls -la
-
       - name: Run tests
         id: run_tests
         continue-on-error: true
         run: |
-          go test -v ./... || {
-            echo "::warning::Tests failed but continuing with build"
-            echo "tests_failed=true" >> $GITHUB_OUTPUT
-            exit 0
-          }
-          echo "tests_failed=false" >> $GITHUB_OUTPUT
+          bash ./scripts/test.sh
 
       - name: Run linter
         id: run_lint
@@ -70,15 +71,13 @@ jobs:
       - name: Set job status
         id: status
         run: |
-          if [[ "${{ steps.run_tests.outputs.tests_failed }}" == "true" ]]; then
-            echo "::warning::Tests failed but continuing with build"
-          fi
           # We continue with the build regardless of test/lint status
+          echo "Build will continue"
 
   build:
     name: Build and Release
-    needs: test
-    if: always()
+    needs: [test, check_commit]
+    if: always() && needs.test.result != 'cancelled'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -126,6 +125,11 @@ jobs:
               DATE=$(date +'%Y%m%d')
               VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
               echo "Created nightly version: $VERSION"
+            # For prerelease builds, append prerelease identifier
+            elif [[ "${{ needs.check_commit.outputs.is_prerelease }}" == "true" ]]; then
+              COMMIT_HASH=$(git rev-parse --short HEAD)
+              VERSION="${BASE_VERSION}-pre.${COMMIT_HASH}"
+              echo "Created prerelease version: $VERSION"
             else
               VERSION="${BASE_VERSION}"
               echo "Using standard version: $VERSION"
@@ -141,33 +145,9 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ env.VERSION }}
         run: |
-          echo "Building for $GOOS/$GOARCH with version ${{ env.VERSION }}"
-          OUTPUT="gitver"
-          if [ "$GOOS" = "windows" ]; then
-            OUTPUT="gitver.exe"
-          fi
-          
-          # Create dist directory first
-          mkdir -p dist
-          
-          # Build the binary
-          go build -v -ldflags "-X github.com/arcalyx/gitver/cmd.Version=${{ env.VERSION }}" -o "dist/${OUTPUT}"
-          
-          # Package the binary
-          cd dist
-          if [ "$GOOS" = "windows" ]; then
-            zip -r "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.zip" "${OUTPUT}"
-            echo "Created Windows zip archive"
-          else
-            tar -czvf "gitver_${{ env.VERSION }}_${GOOS}_${GOARCH}.tar.gz" "${OUTPUT}"
-            echo "Created tar.gz archive"
-          fi
-          cd ..
-          
-          # List the contents of the dist directory
-          echo "Contents of dist directory:"
-          ls -la dist/
+          bash ./scripts/build.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -179,7 +159,7 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [build, check_commit]
     if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     steps:
@@ -213,26 +193,27 @@ jobs:
               COMMIT_HASH=$(git rev-parse --short HEAD)
               DATE=$(date +'%Y%m%d')
               VERSION="${BASE_VERSION}-nightly.${DATE}.${COMMIT_HASH}"
+              RELEASE_TYPE="nightly"
               echo "Created nightly version: $VERSION"
+            # For prerelease builds, append prerelease identifier
+            elif [[ "${{ needs.check_commit.outputs.is_prerelease }}" == "true" ]]; then
+              COMMIT_HASH=$(git rev-parse --short HEAD)
+              VERSION="${BASE_VERSION}-pre.${COMMIT_HASH}"
+              RELEASE_TYPE="prerelease"
+              echo "Created prerelease version: $VERSION"
             else
               VERSION="${BASE_VERSION}"
+              RELEASE_TYPE="stable"
               echo "Using standard version: $VERSION"
             fi
           else
             VERSION=${{ github.event.inputs.version }}
+            RELEASE_TYPE="stable"
             echo "Using manually specified version: $VERSION"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          
-          # Set release type for later use
-          if [[ "${{ github.ref }}" == "refs/heads/nightly" ]]; then
-            echo "RELEASE_TYPE=nightly" >> $GITHUB_ENV
-            echo "This is a nightly build"
-          else
-            echo "RELEASE_TYPE=stable" >> $GITHUB_ENV
-            echo "This is a stable release"
-          fi
+          echo "RELEASE_TYPE=${RELEASE_TYPE}" >> $GITHUB_ENV
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -250,28 +231,11 @@ jobs:
 
       - name: Generate changelog
         id: changelog
+        env:
+          RELEASE_TYPE: ${{ env.RELEASE_TYPE }}
+          VERSION: ${{ env.VERSION }}
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          echo "Latest tag: ${LATEST_TAG:-none}"
-          
-          if [[ "${{ env.RELEASE_TYPE }}" == "nightly" ]]; then
-            echo "Generating changelog for nightly build (last 20 commits)"
-            git log -n 20 --pretty=format:"* %s (%h)" > CHANGELOG.md
-          elif [ -z "$LATEST_TAG" ]; then
-            echo "No previous tag found, including all commits in changelog"
-            git log --pretty=format:"* %s (%h)" > CHANGELOG.md
-          else
-            echo "Generating changelog since tag $LATEST_TAG"
-            git log ${LATEST_TAG}..HEAD --pretty=format:"* %s (%h)" > CHANGELOG.md
-          fi
-          
-          if [ ! -s CHANGELOG.md ]; then
-            echo "No changes found, creating placeholder"
-            echo "* No changes" > CHANGELOG.md
-          fi
-          
-          echo "Changelog contents:"
-          cat CHANGELOG.md
+          bash ./scripts/release.sh
           
           echo 'changelog<<CHANGELOG_DELIMITER' >> $GITHUB_OUTPUT
           cat CHANGELOG.md >> $GITHUB_OUTPUT
@@ -280,11 +244,11 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ env.RELEASE_TYPE == 'nightly' && 'Nightly Build' || 'Release' }} v${{ env.VERSION }}
-          tag_name: ${{ env.RELEASE_TYPE == 'nightly' && format('nightly-{0}', env.VERSION) || format('v{0}', env.VERSION) }}
+          name: ${{ env.RELEASE_TYPE == 'nightly' && 'Nightly Build' || env.RELEASE_TYPE == 'prerelease' && 'Prerelease' || 'Release' }} v${{ env.VERSION }}
+          tag_name: ${{ env.RELEASE_TYPE == 'nightly' && format('nightly-{0}', env.VERSION) || env.RELEASE_TYPE == 'prerelease' && format('pre-{0}', env.VERSION) || format('v{0}', env.VERSION) }}
           body: |
             ## Gitver v${{ env.VERSION }}
-            ${{ env.RELEASE_TYPE == 'nightly' && '⚠️ This is a nightly build and may contain bugs or incomplete features. Use at your own risk.' || '' }}
+            ${{ env.RELEASE_TYPE == 'nightly' && '⚠️ This is a nightly build and may contain bugs or incomplete features. Use at your own risk.' || env.RELEASE_TYPE == 'prerelease' && '⚠️ This is a prerelease build and may contain bugs or incomplete features. Use at your own risk.' || '' }}
             
             ### Changes
             ${{ steps.changelog.outputs.changelog }}
@@ -300,6 +264,6 @@ jobs:
             Download the appropriate binary for your platform below.
           files: dist/*
           draft: false
-          prerelease: ${{ env.RELEASE_TYPE == 'nightly' }}
+          prerelease: ${{ env.RELEASE_TYPE != 'stable' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -231,9 +231,10 @@ All source code for Gitver must:
 ### GitHub CI/CD Workflow
 
 * **Main branch (`master`)** must automatically trigger a **release build**
-* A **nightly build** must be triggered when a commit contains the keyword `#nightly`
+* A **prerelease build** must be triggered when a commit contains the keyword `#prerelease`
 * Builds should validate code, run tests, and publish release artifacts if applicable
 * Final builds must be created and tested for **Windows**, **Linux**, and **macOS** platforms
+* The logic to build and test should be in shell scripts in the scripts directory
 
 ---
 
