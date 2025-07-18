@@ -65,19 +65,21 @@ gitver bump [--major|--minor|--patch|--auto|--commit]
 
 ### Options
 
-| Option         | Type   | Description                                                  |
-| -------------- | ------ | ------------------------------------------------------------ |
-| `--major`      | Flag   | Increase MAJOR version (X.0.0)                               |
-| `--minor`      | Flag   | Increase MINOR version (0.X.0)                               |
-| `--patch`      | Flag   | Increase PATCH version (0.0.X)                               |
-| `--auto`       | Flag   | Determine bump level from commit messages                    |
-| `--commit`     | Flag   | Detect bump type using keyword-matching from config.yaml     |
-| `--prerelease` | String | Add or bump a pre-release identifier (e.g., alpha, rc, bump) |
-| `--build-meta` | String | Add build metadata (e.g., +build.123)                        |
-| `--tag`        | Flag   | Create a Git tag for the version                             |
-| `--changelog`  | Flag   | Generate changelog for the new version                       |
-| `--sync`       | Flag   | Update version in package manager files and subprojects      |
-| `--dry-run`    | Flag   | Show the result without applying any changes                 |
+| Option              | Type   | Description                                                  |
+|---------------------|--------|--------------------------------------------------------------|
+| `--major`           | Flag   | Increase MAJOR version (X.0.0)                               |
+| `--minor`           | Flag   | Increase MINOR version (0.X.0)                               |
+| `--patch`           | Flag   | Increase PATCH version (0.0.X)                               |
+| `--auto`            | Flag   | Determine bump level from commit messages                    |
+| `--infer`           | Flag   | Detect bump type using keyword-matching from config.yaml     |
+| `--prerelease`      | String | Add or bump a pre-release identifier (e.g., alpha, rc, bump) |
+| `--build-meta`      | String | Add build metadata (e.g., +build.123)                        |
+| `--tag`             | Flag   | Create a Git tag for the version                             |
+| `--changelog`       | Flag   | Generates a changelog entry based on the latest Git commits. Only commits following the Conventional Commits specification (semantic commit messages) will be included. The generated changelog can be saved to a file as defined in the configuration (config.yaml), and may be formatted in Markdown or plain text depending on settings.                    |
+| `--update-packages` | Flag   | Update version in package manager files and subprojects      |
+| `--dry-run`         | Flag   | Show the result without applying any changes                 |
+| `--commit`          | Flag   | After performing the version bump, creates a Git commit that includes the modified version files. The commit message is taken from the configuration (config.yaml), allowing full customization of the commit content. This ensures version changes are properly tracked in Git history. |
+| `--push`            | Flag   | After completing the bump and creating a Git commit (if --commit is used), this flag pushes all relevant changes—including commits and tags—to the remote repository.                |
 
 ### Validation Rules
 
@@ -96,7 +98,7 @@ gitver bump --minor --prerelease beta
 gitver bump --auto --changelog --dry-run
 
 # Bump based on configured commit keywords
-gitver bump --commit
+gitver bump --infer
 ```
 
 ---
@@ -124,19 +126,9 @@ Creates a `.gitver` directory in the project root and writes a `config.yaml` wit
 
 * `--detect-projects`: Automatically detect subprojects in the Git repository and add them to the configuration file.
 
-### Options
-
-| Option   | Description             |
-| -------- | ----------------------- |
-| `--get`  | Get the value for a key |
-| `--list` | List all config entries |
-
 ### Examples
 
 ```bash
-gitver config user.name "Alex"
-gitver config --get user.name
-gitver config --list
 gitver config init --detect-projects
 ```
 
@@ -145,10 +137,7 @@ gitver config init --detect-projects
 Defines behavior and preferences for Gitver. Example structure:
 
 ```yaml
-version: 1.2.3
 versioning:
-  auto_detect: true
-  default_bump: patch
   commit_keywords:
     major: ["#breaking", "BREAKING CHANGE"]
     minor: ["feat", "feature"]
@@ -156,10 +145,6 @@ versioning:
 changelog:
   format: markdown
   output_file: CHANGELOG.md
-hooks:
-  pre_commit: true
-  pre_push: true
-  post_merge: true
 subprojects:
   - path: libs/core/pom.xml
     type: maven
@@ -171,13 +156,9 @@ subprojects:
 
 **Explanation:**
 
-* `version`: The current root version managed by Gitver
-* `versioning.auto_detect`: Enables automatic version bumping from commit messages
-* `versioning.default_bump`: Fallback bump level if detection fails
 * `versioning.commit_keywords`: Defines commit message keywords that determine bump type when using `--commit`
 * `changelog.format`: Output format, e.g., `markdown` or `plaintext`
 * `changelog.output_file`: Target file for generated changelog
-* `hooks.*`: Enables Git hooks for respective lifecycle events
 * `subprojects`: List of subprojects whose versions should also be managed
 
   * `path`: Relative path to the version file

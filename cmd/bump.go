@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"fmt"
+	"github.com/arcalyx/gitver/internal/changelog"
 	"github.com/arcalyx/gitver/internal/constants"
 	"github.com/arcalyx/gitver/internal/gitops"
 	"github.com/arcalyx/gitver/internal/version"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"log"
 	"strings"
 )
@@ -17,6 +19,7 @@ var (
 	majorFlag bool
 	minorFlag bool
 	patchFlag bool
+	inferFlag bool
 
 	// Pre-release flags
 	prereleaseFlag        string
@@ -39,7 +42,6 @@ var (
 	updatePackages bool
 	dryRunFlag     bool
 	changelogFlag  bool
-	syncFlag       bool
 	verbose        bool
 )
 
@@ -69,10 +71,11 @@ Examples:
   gitver bump --minor                # Bump minor version (0.x.0)
   gitver bump --patch                # Bump patch version (0.0.x)
   gitver bump --auto                 # Automatically determine version bump based on commit messages
+  gitver bump --infer                # Detect bump type using keyword-matching from config.yaml
   gitver bump --minor --prerelease beta  # Set version to 0.x.0-beta.1
   gitver bump --build-meta build.123     # Add build metadata
   gitver bump --minor --tag --push       # Bump, tag and push changes
-  gitver bump --minor --changelog --sync # Bump, generate changelog and sync package versions
+  gitver bump --minor --changelog --update-packages # Bump, generate changelog and update package versions
   gitver bump --minor --dry-run          # Show what would happen without making changes`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Set the updatePackages flag in the version package
@@ -83,13 +86,35 @@ Examples:
 			log.Println("Running in dry-run mode - no changes will be made")
 		}
 
+		// Validate that only one bump type flag is used
+		bumpFlagCount := 0
+		if majorFlag {
+			bumpFlagCount++
+		}
+		if minorFlag {
+			bumpFlagCount++
+		}
+		if patchFlag {
+			bumpFlagCount++
+		}
+		if autoFlag {
+			bumpFlagCount++
+		}
+		if inferFlag {
+			bumpFlagCount++
+		}
+
+		if bumpFlagCount > 1 {
+			log.Fatal("Only one of --major, --minor, --patch, --auto, or --infer may be used at once")
+		}
+
 		// Load configuration
 		if !dryRunFlag {
 			loadConfig()
 		}
 
 		// Process version bump if requested
-		if majorFlag || minorFlag || patchFlag || autoFlag {
+		if majorFlag || minorFlag || patchFlag || autoFlag || inferFlag {
 			if !dryRunFlag {
 				// Prepare git operations if needed
 				if tagFlag || pushFlag {
@@ -99,7 +124,7 @@ Examples:
 					}
 				}
 
-				// Execute the appropriate bump
+				// Execute the appropriate bump mode
 				switch {
 				case majorFlag:
 					executeMajorMode()
@@ -109,12 +134,14 @@ Examples:
 					executePatchMode()
 				case autoFlag:
 					executeAutoMode()
+				case inferFlag:
+					executeInferMode()
 				}
 
 				log.Printf(message0002, version.GetLastVersion(), version.ToString())
 			} else {
 				// In dry-run mode, just show what would happen
-				bumpType := "unknown"
+				var bumpType string
 				if majorFlag {
 					bumpType = "major"
 				} else if minorFlag {
@@ -123,6 +150,8 @@ Examples:
 					bumpType = "patch"
 				} else if autoFlag {
 					bumpType = "auto (determined from commits)"
+				} else if inferFlag {
+					bumpType = "infer (determined from commit keywords)"
 				}
 				log.Printf("Would bump version (%s)", bumpType)
 			}
@@ -204,17 +233,19 @@ Examples:
 		// Generate changelog if requested
 		if changelogFlag && !dryRunFlag {
 			log.Println("Generating changelog...")
-			// TODO: Implement changelog generation
+			content, err := changelog.GenerateChangelog(version.ToString())
+			if err != nil {
+				log.Printf("Warning: Failed to generate changelog: %v", err)
+			} else {
+				err = changelog.SaveChangelog(content)
+				if err != nil {
+					log.Printf("Warning: Failed to save changelog: %v", err)
+				} else {
+					log.Println("Changelog generated successfully")
+				}
+			}
 		} else if changelogFlag {
 			log.Println("Would generate changelog")
-		}
-
-		// Sync package versions if requested
-		if syncFlag && !dryRunFlag {
-			log.Println("Syncing package versions...")
-			// TODO: Implement sync functionality
-		} else if syncFlag {
-			log.Println("Would sync package versions")
 		}
 
 		// Execute git operations if requested
@@ -244,6 +275,7 @@ func init() {
 	bumpCmd.Flags().BoolVarP(&majorFlag, "major", "M", false, "Bump major version")
 	bumpCmd.Flags().BoolVarP(&minorFlag, "minor", "m", false, "Bump minor version")
 	bumpCmd.Flags().BoolVarP(&patchFlag, "patch", "p", false, "Bump patch version")
+	bumpCmd.Flags().BoolVar(&inferFlag, "infer", false, "Infer version bump based on commit keywords")
 
 	// Pre-release flags
 	bumpCmd.Flags().StringVar(&prereleaseFlag, "prerelease", "", "Set pre-release version (alpha, beta, rc)")
@@ -263,10 +295,10 @@ func init() {
 	bumpCmd.Flags().BoolVarP(&amend, "amend", "", false, "Amend last commit")
 
 	// Other flags
-	bumpCmd.Flags().BoolVarP(&updatePackages, "update-packages", "u", true, "Update version in package manager files")
+	bumpCmd.Flags().BoolVarP(&updatePackages, "update-packages", "u", true, "Update version in package manager files and subprojects")
 	bumpCmd.Flags().BoolVar(&dryRunFlag, "dry-run", false, "Show what would happen without making changes")
 	bumpCmd.Flags().BoolVar(&changelogFlag, "changelog", false, "Generate changelog")
-	bumpCmd.Flags().BoolVar(&syncFlag, "sync", false, "Sync versions in package files")
+	bumpCmd.Flags().BoolVar(&verbose, "verbose", false, "Show verbose output")
 
 	// Set the flag in the version package
 	version.SetUpdatePackages(updatePackages)
@@ -312,6 +344,19 @@ func executeAutoMode() {
 	log.Println("start auto mode success")
 }
 
+func executeInferMode() {
+	log.Println("start infer mode")
+	bumpFunc, err := detectInferBump()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = bumpFunc()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("start infer mode success")
+}
+
 func detectAutoBump() (func() error, error) {
 	log.Println("start detect bump function for auto mode")
 	tag, err := gitops.GetLastTag()
@@ -328,6 +373,97 @@ func detectAutoBump() (func() error, error) {
 	} else {
 		return nil, fmt.Errorf("no new version required")
 	}
+}
+
+func detectInferBump() (func() error, error) {
+	log.Println("start detect bump function for infer mode")
+	tag, err := gitops.GetLastTag()
+	if err != nil {
+		return nil, err
+	}
+
+	if tag == fmt.Sprintf(constants.ReleaseTag, version.ToString()) {
+		return analyzeCommitsForInfer(tag)
+	} else if tag == fmt.Sprintf(constants.VersionTag, version.ToString()) {
+		return analyzeAndCompareCommitsForInfer(tag, fmt.Sprintf(constants.ReleaseTag, version.GetLastVersion()))
+	} else if tag == "" {
+		return analyzeCommitsForInfer(tag)
+	} else {
+		return nil, fmt.Errorf("no new version required")
+	}
+}
+
+func comparePriority(first, second int) int {
+	if second > first {
+		return second
+	}
+	return 0
+}
+
+func findCommitPriority(commits []*object.Commit) int {
+	highestPriority := PriorityNone
+
+	for _, commit := range commits {
+		message := commit.Message
+		if strings.Contains(message, "BREAKING CHANGE") || strings.Contains(message, "#breaking") {
+			return PriorityBreakingChange
+		} else if strings.Contains(message, "feat") || strings.Contains(message, "feature") {
+			highestPriority = comparePriority(highestPriority, PriorityFeat)
+		} else if strings.Contains(message, "fix") || strings.Contains(message, "bugfix") {
+			highestPriority = comparePriority(highestPriority, PriorityFix)
+		}
+	}
+
+	return highestPriority
+}
+
+func findCommitPriorityForInfer(commits []*object.Commit) int {
+	highestPriority := PriorityNone
+
+	// Get commit keywords from config
+	majorKeywords := viper.GetStringSlice("versioning.commit_keywords.major")
+	minorKeywords := viper.GetStringSlice("versioning.commit_keywords.minor")
+	patchKeywords := viper.GetStringSlice("versioning.commit_keywords.patch")
+
+	// If no keywords are defined in config, use defaults
+	if len(majorKeywords) == 0 {
+		majorKeywords = []string{"BREAKING CHANGE", "#breaking"}
+	}
+	if len(minorKeywords) == 0 {
+		minorKeywords = []string{"feat", "feature"}
+	}
+	if len(patchKeywords) == 0 {
+		patchKeywords = []string{"fix", "bugfix"}
+	}
+
+	for _, commit := range commits {
+		message := commit.Message
+
+		// Check for major version bump keywords
+		for _, keyword := range majorKeywords {
+			if strings.Contains(message, keyword) {
+				return PriorityBreakingChange
+			}
+		}
+
+		// Check for minor version bump keywords
+		for _, keyword := range minorKeywords {
+			if strings.Contains(message, keyword) {
+				highestPriority = comparePriority(highestPriority, PriorityFeat)
+				break
+			}
+		}
+
+		// Check for patch version bump keywords
+		for _, keyword := range patchKeywords {
+			if strings.Contains(message, keyword) {
+				highestPriority = comparePriority(highestPriority, PriorityFix)
+				break
+			}
+		}
+	}
+
+	return highestPriority
 }
 
 func analyzeCommits(tag string) (func() error, error) {
@@ -382,28 +518,56 @@ func analyzeAndCompareCommits(starttag, endtag string) (func() error, error) {
 	}
 }
 
-func comparePriority(first, second int) int {
-	if second > first {
-		return second
+func analyzeCommitsForInfer(tag string) (func() error, error) {
+	log.Println("analyze commits from head to", tag)
+	commits, err := gitops.GetCommits(tag)
+	if err != nil {
+		log.Fatal(err)
 	}
-	return 0
+
+	log.Println(len(commits), "commits found")
+
+	priority := findCommitPriorityForInfer(commits)
+	log.Println("bump priority are:", priority)
+	switch priority {
+	case PriorityBreakingChange:
+		return version.BumpMajor, nil
+	case PriorityFeat:
+		return version.BumpMinor, nil
+	case PriorityFix:
+		return version.BumpPatch, nil
+	default:
+		return nil, fmt.Errorf("no new version required")
+	}
 }
 
-func findCommitPriority(commits []*object.Commit) int {
-	highestPriority := PriorityNone
-
-	for _, commit := range commits {
-		message := commit.Message
-		if strings.Contains(message, "BREAKING CHANGE") || strings.Contains(message, "#breaking") {
-			return PriorityBreakingChange
-		} else if strings.Contains(message, "feat") || strings.Contains(message, "feature") {
-			highestPriority = comparePriority(highestPriority, PriorityFeat)
-		} else if strings.Contains(message, "fix") || strings.Contains(message, "bugfix") {
-			highestPriority = comparePriority(highestPriority, PriorityFix)
-		}
+func analyzeAndCompareCommitsForInfer(starttag, endtag string) (func() error, error) {
+	log.Println("analyze commits from", starttag, "to", endtag)
+	oldCommits, err := gitops.GetCommitsBetweenTags(starttag, endtag)
+	if err != nil {
+		log.Fatal(err)
 	}
+	log.Println(len(oldCommits), "commits found")
 
-	return highestPriority
+	log.Println("analyze commits from head to", starttag)
+	newCommits, err := gitops.GetCommits(starttag)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println(len(newCommits), "commits found")
+
+	priority := comparePriority(findCommitPriorityForInfer(oldCommits), findCommitPriorityForInfer(newCommits))
+	log.Println("bump priority are:", priority)
+	switch priority {
+	case PriorityBreakingChange:
+		return version.BumpMajor, nil
+	case PriorityFeat:
+		return version.BumpMinor, nil
+	case PriorityFix:
+		return version.BumpPatch, nil
+	default:
+		return nil, fmt.Errorf("cannot detect bump function")
+	}
 }
 
 func executeGitOperations() {

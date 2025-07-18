@@ -1,0 +1,12 @@
+
+[0;34m=== Go Linting ===[0m
+
+Running golangci-lint...
+internal/changelog/changelog.go:1: : # github.com/arcalyx/gitver/internal/changelog
+internal/changelog/changelog.go:11:2: "path/filepath" imported and not used (typecheck)
+package changelog
+cmd/bump.go:5:2: could not import github.com/arcalyx/gitver/internal/changelog (-: # github.com/arcalyx/gitver/internal/changelog
+internal/changelog/changelog.go:11:2: "path/filepath" imported and not used) (typecheck)
+	"github.com/arcalyx/gitver/internal/changelog"
+	^
+[0;31m✗ Linting failed[0m

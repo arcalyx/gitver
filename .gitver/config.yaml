@@ -1,0 +1,15 @@
+version: 0.0.1
+versioning:
+  auto_detect: true
+  default_bump: patch
+  commit_keywords:
+    major: ["[major]"]
+    minor: ["[minor]"]
+    patch: ["[patch]"]
+changelog:
+  format: markdown
+  output_file: CHANGELOG.md
+hooks:
+  pre_commit: true
+  pre_push: true
+  post_merge: true
