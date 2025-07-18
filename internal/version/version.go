@@ -556,6 +556,46 @@ func GetBuildMetadata() string {
 	return v.GetBuildMetadata()
 }
 
+// GetMajor returns the major version number
+func (v *Version) GetMajor() int {
+	return v.major
+}
+
+// GetMajor returns the major version number of the current version
+func GetMajor() int {
+	return v.GetMajor()
+}
+
+// GetMinor returns the minor version number
+func (v *Version) GetMinor() int {
+	return v.minor
+}
+
+// GetMinor returns the minor version number of the current version
+func GetMinor() int {
+	return v.GetMinor()
+}
+
+// GetPatch returns the patch version number
+func (v *Version) GetPatch() int {
+	return v.patch
+}
+
+// GetPatch returns the patch version number of the current version
+func GetPatch() int {
+	return v.GetPatch()
+}
+
+// GetPreRelease returns the pre-release identifier
+func (v *Version) GetPreRelease() string {
+	return v.preRelease
+}
+
+// GetPreRelease returns the pre-release identifier of the current version
+func GetPreRelease() string {
+	return v.GetPreRelease()
+}
+
 // GetFileSystem returns the current file system used by the version package
 func GetFileSystem() afero.Fs {
 	return v.fs

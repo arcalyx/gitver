@@ -40,12 +40,6 @@ func prepareGitOperation() error {
 
 }
 
-func logf(format string, v ...any) {
-	if verbose {
-		log.Printf(format, v...)
-	}
-}
-
 func prints(v ...any) {
 	if verbose {
 		log.Print(v...)

@@ -10,19 +10,18 @@ import (
 )
 
 var (
+	keywordFlag    string
 	preCommitFlag  bool
 	prePushFlag    bool
 	postMergeFlag  bool
 	installAllFlag bool
-	removeFlag     bool
-	keywordFlag    string
 )
 
 // hooksCmd represents the hooks command
 var hooksCmd = &cobra.Command{
 	Use:   "hooks",
 	Short: "Manage Git hooks for automatic version management",
-	Long: `Install or remove Git hooks for automatic version management.
+	Long: `Manage Git hooks for automatic version management.
 	
 This command allows you to set up Git hooks that automate version management tasks:
 
@@ -32,17 +31,28 @@ This command allows you to set up Git hooks that automate version management tas
 
 You can specify a keyword that must be present in commit messages to trigger version updates.
 
-Example:
-  gitver hooks --install-all                # Install all supported hooks
-  gitver hooks --pre-commit                 # Install only the pre-commit hook
-  gitver hooks --pre-commit --keyword=bump  # Install hook that triggers on "bump" keyword
-  gitver hooks --remove                     # Remove all gitver hooks`,
+Examples:
+  gitver hooks install            # Install all Git hooks
+  gitver hooks install --pre-commit # Install only pre-commit hook
+  gitver hooks uninstall          # Remove all gitver hooks
+  gitver hooks list               # Show active gitver hooks`,
+}
+
+// installCmd represents the install subcommand
+var installCmd = &cobra.Command{
+	Use:   "install",
+	Short: "Install Git hooks",
+	Long: `Install Git hooks for automatic version management.
+	
+You can install specific hooks or all hooks. Optionally, specify a keyword
+that must be present in commit messages to trigger version updates.
+
+Examples:
+  gitver hooks install            # Install all hooks
+  gitver hooks install --pre-commit # Install only pre-commit hook
+  gitver hooks install --keyword=bump # Install hooks that trigger on "bump" keyword`,
 	Run: func(cmd *cobra.Command, args []string) {
-		if !preCommitFlag && !prePushFlag && !postMergeFlag && !installAllFlag && !removeFlag {
-			fmt.Println("Please specify which hooks to install or use --remove to uninstall hooks")
-			fmt.Println("Run 'gitver hooks --help' for usage information")
-			return
-		}
+		loadConfig()
 
 		gitDir, err := findGitDir()
 		if err != nil {
@@ -58,12 +68,8 @@ Example:
 			}
 		}
 
-		if removeFlag {
-			removeHooks(hooksDir)
-			return
-		}
-
-		if installAllFlag {
+		// If no specific hook is selected, install all
+		if !preCommitFlag && !prePushFlag && !postMergeFlag || installAllFlag {
 			preCommitFlag = true
 			prePushFlag = true
 			postMergeFlag = true
@@ -91,15 +97,114 @@ Example:
 	},
 }
 
+// uninstallCmd represents the uninstall subcommand
+var uninstallCmd = &cobra.Command{
+	Use:   "uninstall",
+	Short: "Remove all gitver-managed hooks",
+	Long: `Remove all Git hooks installed by gitver.
+	
+This command will remove all hooks that were installed by gitver.
+If a hook was backed up during installation, the original hook will be restored.
+
+Example:
+  gitver hooks uninstall`,
+	Run: func(cmd *cobra.Command, args []string) {
+		loadConfig()
+
+		gitDir, err := findGitDir()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+
+		hooksDir := filepath.Join(gitDir, "hooks")
+		if _, err := os.Stat(hooksDir); os.IsNotExist(err) {
+			fmt.Println("No hooks directory found.")
+			return
+		}
+
+		removeHooks(hooksDir)
+	},
+}
+
+// listCmd represents the list subcommand
+var listCmd = &cobra.Command{
+	Use:   "list",
+	Short: "Show active gitver hooks",
+	Long: `List all active Git hooks installed by gitver.
+	
+This command shows which hooks are currently installed and managed by gitver.
+
+Example:
+  gitver hooks list`,
+	Run: func(cmd *cobra.Command, args []string) {
+		loadConfig()
+
+		gitDir, err := findGitDir()
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			return
+		}
+
+		hooksDir := filepath.Join(gitDir, "hooks")
+		if _, err := os.Stat(hooksDir); os.IsNotExist(err) {
+			fmt.Println("No hooks directory found.")
+			return
+		}
+
+		listInstalledHooks(hooksDir)
+	},
+}
+
 func init() {
 	rootCmd.AddCommand(hooksCmd)
 
-	hooksCmd.Flags().BoolVar(&preCommitFlag, "pre-commit", false, "Install pre-commit hook")
-	hooksCmd.Flags().BoolVar(&prePushFlag, "pre-push", false, "Install pre-push hook")
-	hooksCmd.Flags().BoolVar(&postMergeFlag, "post-merge", false, "Install post-merge hook")
-	hooksCmd.Flags().BoolVar(&installAllFlag, "install-all", false, "Install all supported hooks")
-	hooksCmd.Flags().BoolVar(&removeFlag, "remove", false, "Remove all gitver hooks")
-	hooksCmd.Flags().StringVar(&keywordFlag, "keyword", "", "Keyword in commit message that triggers version updates")
+	// Add subcommands
+	hooksCmd.AddCommand(installCmd)
+	hooksCmd.AddCommand(uninstallCmd)
+	hooksCmd.AddCommand(listCmd)
+
+	// Add flags to install subcommand
+	installCmd.Flags().BoolVar(&preCommitFlag, "pre-commit", false, "Install pre-commit hook")
+	installCmd.Flags().BoolVar(&prePushFlag, "pre-push", false, "Install pre-push hook")
+	installCmd.Flags().BoolVar(&postMergeFlag, "post-merge", false, "Install post-merge hook")
+	installCmd.Flags().BoolVar(&installAllFlag, "all", false, "Install all supported hooks")
+	installCmd.Flags().StringVar(&keywordFlag, "keyword", "", "Keyword in commit message that triggers version updates")
+}
+
+// listInstalledHooks checks and lists all installed gitver hooks
+func listInstalledHooks(hooksDir string) {
+	hooks := []string{"pre-commit", "pre-push", "post-merge"}
+	found := false
+
+	fmt.Println("Installed gitver hooks:")
+	fmt.Println("----------------------")
+
+	for _, hook := range hooks {
+		hookPath := filepath.Join(hooksDir, hook)
+
+		// Check if hook exists
+		if _, err := os.Stat(hookPath); os.IsNotExist(err) {
+			continue
+		}
+
+		// Read hook content
+		content, err := os.ReadFile(hookPath)
+		if err != nil {
+			fmt.Printf("Error reading %s hook: %v\n", hook, err)
+			continue
+		}
+
+		// Check if it's our hook
+		if strings.Contains(string(content), "# gitver") {
+			found = true
+			fmt.Printf("✓ %s\n", hook)
+		}
+	}
+
+	if !found {
+		fmt.Println("No gitver hooks are currently installed.")
+	}
 }
 
 func saveKeywordConfig(keyword string) error {

@@ -1,21 +1,33 @@
-MIT License
+Business Source License 1.1
 
-Copyright (c) 2023 Alexander Kraft
+Licensor: Alexander Kraft
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Licensed Work: The software project named “gitver”, including all source code and associated files in this repository.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Additional Use Grant:
+You may use, copy, modify, and distribute this Licensed Work, or portions thereof, free of charge for:
+- personal, non-commercial use
+- non-commercial Open Source projects released under an OSI-approved license
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Use Limitation:
+Use of this Licensed Work (or any derivative works) in a commercial setting is prohibited unless a commercial license is purchased from the Licensor. This includes, but is not limited to, usage:
+- by businesses or organizations of any kind
+- in internal company workflows
+- in any product or service, paid or unpaid, used in a professional environment
+
+Forks or derivative works may not be used, published, distributed, or hosted in any public or private setting, for either commercial or non-commercial purposes, unless explicitly approved in writing by the Licensor.
+
+Change Date:
+Three (3) years from the date of the first public release of the Licensed Work.
+
+Change License:
+On the Change Date, this Licensed Work will automatically be made available under the terms of the Apache License, Version 2.0.
+
+---
+
+Copyright (C) 2025 Alexander Kraft
+
+This license governs use of the accompanying software. If you use the software, you accept this license. If you do not accept the license, do not use the software.
+
+Licensed under the Business Source License 1.1  
+See: https://mariadb.com/bsl11

@@ -128,7 +128,7 @@ func (g *GitOps) Commit(message string, amend bool) error {
 		},
 	}
 
-	// Wenn amend wahr ist, verwenden Sie die Amend-Option
+	// If amend is true, use the amend option
 	if amend {
 		headRef, err := g.repository.Head()
 		if err != nil {
@@ -195,10 +195,10 @@ func (g *GitOps) GetLatestTag() (string, error) {
 	err = tagRefs.ForEach(func(t *plumbing.Reference) error {
 		obj, err := g.repository.TagObject(t.Hash())
 		if err != nil {
-			// Es könnte ein leichtes Tag sein, also versuchen Sie, den Commit direkt zu bekommen
+			// It might be a lightweight tag, so try to get the commit directly
 			commit, err := g.repository.CommitObject(t.Hash())
 			if err != nil {
-				return nil // Ignorieren von Fehlern, die durch leichte Tags verursacht werden
+				return nil // Ignore errors caused by lightweight tags
 			}
 			tags = append(tags, struct {
 				Name string
@@ -216,7 +216,7 @@ func (g *GitOps) GetLatestTag() (string, error) {
 		return "", err
 	}
 
-	// Sortieren Sie die Tags nach Datum
+	// Sort tags by date
 	sort.Slice(tags, func(i, j int) bool {
 		return tags[i].When.After(tags[j].When)
 	})
@@ -234,13 +234,13 @@ func Push() error {
 
 func (g *GitOps) Push() error {
 
-	// HEAD-Referenz holen
+	// Get the HEAD reference
 	headRef, err := g.repository.Head()
 	if err != nil {
 		return err
 	}
 
-	// HEAD dereferenzieren, um den aktuellen Branch zu bekommen
+	// Dereference the HEAD to get the current branch
 	ref, err := g.repository.Reference(headRef.Name(), true)
 	if err != nil {
 		return err
@@ -286,12 +286,12 @@ func GetTag(tag string) (plumbing.Hash, error) {
 func (g *GitOps) GetTag(tag string) (plumbing.Hash, error) {
 	tagRef, err := g.repository.Tag(tag)
 	if err == nil {
-		// Dereferenziert das Tag-Objekt, falls es ein annotiertes Tag ist
+		// Dereference the tag object, if it's an annotated tag
 		resolvedTag, err := g.repository.TagObject(tagRef.Hash())
 		if err == nil {
 			return resolvedTag.Target, nil
 		} else {
-			// Wenn es kein annotiertes Tag ist, sondern ein leichtgewichtiger Tag
+			// If it's not an annotated tag, but a lightweight tag
 			return tagRef.Hash(), nil
 		}
 	}

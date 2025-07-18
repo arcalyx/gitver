@@ -58,7 +58,7 @@ func init() {
 	if err != nil {
 		projectDir, err = os.Getwd()
 		if err != nil {
-			log.Fatalf(err.Error())
+			log.Fatal("Error determining current directory:", err)
 		}
 	}
 
